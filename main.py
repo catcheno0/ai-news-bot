@@ -14,7 +14,8 @@ from src.notifiers import (
     WebhookNotifier,
     SlackNotifier,
     TelegramNotifier,
-    DiscordNotifier
+    DiscordNotifier,
+    PushPlusNotifier
 )
 
 
@@ -142,6 +143,17 @@ def main():
                     else:
                         lang_results["failed"].append("discord")
                         logger.warning(f"Discord notification failed for {language.upper()}")
+
+                # Send PushPlus notification if enabled
+                if "pushplus" in notification_methods:
+                    logger.info(f"Sending PushPlus notification for {language.upper()}...")
+                    pushplus_notifier = PushPlusNotifier()
+                    if pushplus_notifier.send(news_digest, language=language):
+                        lang_results["sent"].append("pushplus")
+                        logger.info(f"PushPlus notification sent successfully for {language.upper()}")
+                    else:
+                        lang_results["failed"].append("pushplus")
+                        logger.warning(f"PushPlus notification failed for {language.upper()}")
 
                 # Update overall results
                 for method in lang_results["sent"]:

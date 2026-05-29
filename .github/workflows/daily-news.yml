@@ -76,6 +76,9 @@ jobs:
           # The bot will generate and send news for each language separately
           AI_RESPONSE_LANGUAGE: ${{ secrets.AI_RESPONSE_LANGUAGE }}
 
+          # PushPlus 微信推送
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+
         run: |
           python main.py
 
