@@ -40,6 +40,19 @@ news:
       - ✅ Include both international and domestic news when available
       - ✅ Prefer primary sources over secondary reporting
 
+      ### QUALITY FILTER (apply before selection):
+      Content that meets ANY of the following should be DEPRIORITIZED or EXCLUDED:
+      - ❌ Excessive marketing hype words: 颠覆性、彻夜难眠、全网炸裂、震惊、沸腾、炸裂、暴打、碾压、逆天、封神 (and similar sensational terms in any language, e.g. "mind-blowing", "game-changer" used without substance)
+      - ❌ No specific benchmark scores, model parameters, code repositories, or concrete application scenarios
+      - ❌ Pure speculation without supporting evidence or primary source links
+      - ❌ Press-release syndication with no original reporting or analysis
+
+      Content that meets ANY of the following should be PRIORITIZED:
+      - ✅ Includes links to GitHub repositories, arXiv papers, or official model cards
+      - ✅ Cites specific benchmark results (MMLU, HumanEval, GSM8K, etc.) with numbers
+      - ✅ Verified by multiple authoritative sources or primary source confirmation
+      - ✅ Contains concrete technical details: parameter counts, architecture descriptions, training methodology
+
       ### OUTPUT FORMAT:
       Return ONLY a JSON array of selected news IDs. No explanations, no markdown, just the JSON array.
 
