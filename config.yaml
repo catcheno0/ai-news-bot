@@ -94,6 +94,7 @@ news:
          - Why it matters (industry significance and impact)
          - Potential implications (future developments, competitive landscape)
       3. **Source Attribution**: Always include as clickable markdown link: [Source Name](URL)
+      4. **Publication Time**: Always include the original publication date/time of the news item. If the exact time is available, include it (e.g., "Published: 2026-05-30 14:00 UTC"). If only the date is known, include the date (e.g., "Published: 2026-05-30")
 
       ## WRITING STYLE:
       - Professional, analytical tone suitable for industry professionals
