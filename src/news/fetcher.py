@@ -21,9 +21,9 @@ class NewsFetcher:
             # Major Tech Media
             "TechCrunch AI": "https://techcrunch.com/tag/artificial-intelligence/feed/",
             "VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
-            "MIT Technology Review": "https://www.technologyreview.com/feed/",
+            "MIT Technology Review": "https://www.technologyreview.com/topic/artificial-intelligence/feed/",
             "Ars Technica AI": "https://arstechnica.com/tag/ai/feed/",
-            "Wired AI": "https://www.wired.com/feed/tag/ai/latest/rss",
+            "Wired AI": "https://www.wired.com/feed/category/gear/ai/latest/rss",
             "The Next Web": "https://thenextweb.com/feed",
             "The Verge AI": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
             "Engadget AI": "https://www.engadget.com/tag/ai/rss.xml",
@@ -41,10 +41,11 @@ class NewsFetcher:
             "arXiv Computer Vision": "https://rss.arxiv.org/rss/cs.CV",
             "arXiv NLP": "https://rss.arxiv.org/rss/cs.CL",
 
-            # Industry Verticals
-            "Healthcare IT News AI": "https://www.healthcareitnews.com/taxonomy/term/31/feed",
-            "Robotics Business Review": "https://www.roboticsbusinessreview.com/feed/",
-            "Autonomous Vehicle News": "https://www.autonomousvehicleinternational.com/feed",
+            # Independent Voices & Community
+            "Simon Willison": "https://simonwillison.net/atom/entries/",
+            "Import AI (Jack Clark)": "https://importai.substack.com/feed",
+            "Hacker News": "https://news.ycombinator.com/rss",
+            "Reddit r/LocalLLaMA": "https://www.reddit.com/r/LocalLLaMA/.rss",
         }
 
         # Chinese AI news sources (zh)
