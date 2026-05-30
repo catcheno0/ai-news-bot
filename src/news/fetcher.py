@@ -23,17 +23,16 @@ class NewsFetcher:
             "VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
             "MIT Technology Review": "https://www.technologyreview.com/topic/artificial-intelligence/feed/",
             "Ars Technica AI": "https://arstechnica.com/tag/ai/feed/",
-            "Wired AI": "https://www.wired.com/feed/category/gear/ai/latest/rss",
+            "Wired": "https://www.wired.com/feed/rss",
             "The Next Web": "https://thenextweb.com/feed",
             "The Verge AI": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
-            "Engadget AI": "https://www.engadget.com/tag/ai/rss.xml",
+            "Engadget": "https://www.engadget.com/rss.xml",
 
             # Official AI Company Blogs
-            "OpenAI Blog": "https://openai.com/blog/rss/",
             "Google AI Blog": "https://blog.google/technology/ai/rss/",
-            "DeepMind Blog": "https://deepmind.google/blog/rss.xml",
-            "Meta AI Blog": "https://ai.meta.com/blog/rss/",
+            "Anthropic Blog": "https://www.anthropic.com/feed.xml",
             "Microsoft AI Blog": "https://blogs.microsoft.com/ai/feed/",
+            "HuggingFace Blog": "https://huggingface.co/blog/feed.xml",
 
             # Research & Academic
             "arXiv AI": "https://rss.arxiv.org/rss/cs.AI",
@@ -43,7 +42,6 @@ class NewsFetcher:
 
             # Independent Voices & Community
             "Simon Willison": "https://simonwillison.net/atom/entries/",
-            "Import AI (Jack Clark)": "https://importai.substack.com/feed",
             "Hacker News": "https://news.ycombinator.com/rss",
             "Reddit r/LocalLLaMA": "https://www.reddit.com/r/LocalLLaMA/.rss",
         }
@@ -52,9 +50,8 @@ class NewsFetcher:
         self.chinese_feeds = {
             # Tech News Outlets
             "36Kr (36氪)": "https://36kr.com/feed",
-            "JiQiZhiXin (机器之心)": "https://www.jiqizhixin.com/rss",
+            "JiQiZhiXin (机器之心)": "https://rsshub.app/jiqizhixin/latest",
             "Leiphone (雷锋网)": "https://www.leiphone.com/feed",
-            "iFeng Tech (凤凰科技)": "https://tech.ifeng.com/rss/index.xml",
             "Sina Tech (新浪科技)": "http://rss.sina.com.cn/tech/rollnews.xml",
             # Google News (fallback)
             "Google News AI (CN)": "https://news.google.com/rss/search?q=人工智能+AI&hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
