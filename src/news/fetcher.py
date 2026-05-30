@@ -3,7 +3,8 @@ News fetcher module - Fetches real-time AI news from various sources
 """
 import requests
 from typing import List, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 import xml.etree.ElementTree as ET
 from ..logger import setup_logger
 
@@ -247,6 +248,62 @@ class NewsFetcher:
         clean = re.compile('<.*?>')
         return re.sub(clean, '', text).strip()
 
+    def _parse_pubdate(self, date_str: str) -> Optional[datetime]:
+        """Parse RSS/Atom pubDate strings to UTC datetime. Returns None if unparseable."""
+        if not date_str or not date_str.strip():
+            return None
+        date_str = date_str.strip()
+
+        formats = [
+            # RFC 2822 (RSS standard): "Mon, 29 May 2026 14:30:00 +0000"
+            ("rfc2822", lambda s: parsedate_to_datetime(s)),
+            # ISO 8601 with Z: "2026-05-29T14:30:00Z"
+            ("iso_z", lambda s: datetime.fromisoformat(s.replace("Z", "+00:00"))),
+            # ISO 8601 with timezone: "2026-05-29T14:30:00+00:00"
+            ("iso_tz", lambda s: datetime.fromisoformat(s)),
+        ]
+
+        for _name, parser in formats:
+            try:
+                dt = parser(date_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt.astimezone(timezone.utc)
+            except (ValueError, TypeError, IndexError):
+                continue
+
+        return None
+
+    def _filter_by_time(
+        self,
+        items: List[Dict[str, str]],
+        max_age_hours: int = 48
+    ) -> List[Dict[str, str]]:
+        """Filter news items to only those published within max_age_hours from now."""
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(hours=max_age_hours)
+
+        kept = []
+        dropped = 0
+        unparseable = 0
+
+        for item in items:
+            pub_dt = self._parse_pubdate(item.get("published", ""))
+            if pub_dt is None:
+                unparseable += 1
+                kept.append(item)  # 无法解析日期的保留，避免误杀
+            elif pub_dt >= cutoff:
+                kept.append(item)
+            else:
+                dropped += 1
+
+        if dropped > 0:
+            logger.info(f"Time filter: dropped {dropped} items older than {max_age_hours}h")
+        if unparseable > 0:
+            logger.info(f"Time filter: kept {unparseable} items with unparseable dates")
+
+        return kept
+
     def fetch_recent_news(
         self,
         language: str = "en",
@@ -295,6 +352,7 @@ class NewsFetcher:
         feeds = language_feeds_map.get(language)
         if not feeds:
             logger.warning(f"No domestic feeds configured for language: {language}, using international only")
+            all_news['international'] = self._filter_by_time(all_news['international'])
             return all_news
 
         for source_name, feed_url in feeds.items():
@@ -302,6 +360,9 @@ class NewsFetcher:
             for item in items:
                 item['source'] = source_name
                 all_news['domestic'].append(item)
+
+        all_news['international'] = self._filter_by_time(all_news['international'])
+        all_news['domestic'] = self._filter_by_time(all_news['domestic'])
 
         logger.info(
             f"Fetched {len(all_news['international'])} international news items "
