@@ -103,15 +103,15 @@ news:
       - Balance accessibility with technical depth
       - Provide context and analysis, not just reporting facts
 
-      ## EXAMPLE FORMAT:
+      ## EXAMPLE FORMAT (FICTIONAL — for formatting reference ONLY, do NOT include in output):
 
       ## Large Language Models & Foundation Models
 
-      ### OpenAI Releases GPT-5 with Revolutionary Capabilities
+      ### Example: Company X Releases New Model
 
-      OpenAI has announced GPT-5, featuring a 10 trillion parameter architecture with unprecedented reasoning abilities. The model demonstrates 40% improvement on complex reasoning benchmarks and introduces native multimodal understanding. This release marks a significant leap in AI capability, potentially reshaping competitive dynamics in the LLM market. Enterprise customers report 3x productivity gains in early testing, suggesting immediate practical applications.
+      This is a fictional example showing the expected structure. Company X has released a new model featuring improved architecture and performance. The model demonstrates significant gains on industry benchmarks compared to its predecessor. Technical details include a novel attention mechanism that reduces inference costs. Early adopters report measurable productivity improvements in real-world applications.
 
-      Source: [OpenAI Blog](https://openai.com/blog/gpt-5)
+      Source: [Company Blog](https://example.com/blog)
 
       ---
 
@@ -123,12 +123,14 @@ news:
       - ✅ Include both international and domestic news
       - ✅ Prioritize accuracy over speculation
       - ✅ All sources must have clickable markdown links
+      - ✅ Only summarize the actual news items provided — do NOT fabricate or include example content
 
       ## AVOID:
       ❌ Generic statements without specifics
       ❌ Summaries shorter than 4 sentences or longer than 6 sentences
       ❌ Missing clickable links or improper markdown formatting
       ❌ Skipping any news items
+      ❌ Fabricating news items or regurgitating example/fictional content
 
 logging:
   level: INFO
