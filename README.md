@@ -143,7 +143,22 @@ Manually trigger the workflow to verify everything works:
 Repository → Actions tab → Daily AI News Digest → Run workflow button
 ```
 
-### Step 5: Automated Daily Delivery
+### Step 5: GitHub Pages Digest Link
+
+This fork can publish each generated digest as a static GitHub Pages page. In repository settings, set:
+
+```text
+Settings -> Pages -> Source: GitHub Actions
+Custom domain: news.my-ai-news.top
+```
+
+The workflow writes `public/latest.html` and `public/YYYY-MM-DD.html`, deploys `public/` to GitHub Pages, and sends this link through the WeChat Official Account test template message:
+
+```text
+https://news.my-ai-news.top/latest.html
+```
+
+### Step 6: Automated Daily Delivery
 
 The workflow runs automatically every day at midnight UTC (8:00 AM Beijing time). To customize the schedule, edit `.github/workflows/daily-news.yml`:
 
@@ -201,8 +216,18 @@ EMAIL_TO=recipient@example.com
 # Optional: Webhook Configuration
 WEBHOOK_URL=https://your-webhook-url.com/endpoint
 
+# Optional: Self-hosted WeChat Push Lite backend
+WECHAT_PUSH_LITE_URL=http://127.0.0.1:8000/api/send
+WECHAT_PUSH_LITE_TOKEN=your_push_api_token_here
+
+# Optional: WeChat Official Account test account
+WECHAT_OFFICIAL_APP_ID=your_wechat_official_app_id_here
+WECHAT_OFFICIAL_APP_SECRET=your_wechat_official_app_secret_here
+WECHAT_OFFICIAL_OPENID=your_test_account_openid_here
+WECHAT_OFFICIAL_TEMPLATE_ID=your_template_id_here
+
 # Notification Methods (comma-separated)
-# Available: email, webhook, slack, telegram, discord
+# Available: email, webhook, slack, telegram, discord, pushplus, wechat_push_lite, wechat_official
 NOTIFICATION_METHODS=email,webhook
 
 # Language Settings (optional, defaults to 'en')
@@ -309,6 +334,12 @@ The bot requires the following configuration. How you set them depends on your d
 | `GMAIL_APP_PASSWORD`   | If using Gmail    | Gmail App Password (16 characters, NOT regular password)                                                                         |
 | `EMAIL_TO`             | If using email    | Recipient email address                                                                                                          |
 | `WEBHOOK_URL`          | If using webhook  | Webhook endpoint URL                                                                                                             |
+| `WECHAT_PUSH_LITE_URL` | If using `wechat_push_lite` | Self-hosted push backend endpoint, usually `http://127.0.0.1:8000/api/send`                                            |
+| `WECHAT_PUSH_LITE_TOKEN` | If using `wechat_push_lite` | Bearer token accepted by the push backend. Falls back to `PUSH_API_TOKEN` if unset                                  |
+| `WECHAT_OFFICIAL_APP_ID` | If using `wechat_official` | WeChat Official Account test account AppID |
+| `WECHAT_OFFICIAL_APP_SECRET` | If using `wechat_official` | WeChat Official Account test account AppSecret |
+| `WECHAT_OFFICIAL_OPENID` | If using `wechat_official` | OpenID from the test account user list |
+| `WECHAT_OFFICIAL_TEMPLATE_ID` | If using `wechat_official` | Template ID for the test account message |
 | `SLACK_WEBHOOK_URL`    | If using Slack    | Slack Incoming Webhook URL                                                                                                       |
 | `SLACK_CHANNEL`        | Optional          | Override default Slack channel (e.g., `#general`)                                                                                |
 | `SLACK_USERNAME`       | Optional          | Override bot username for Slack (default: `AI News Bot`)                                                                         |
@@ -317,6 +348,8 @@ The bot requires the following configuration. How you set them depends on your d
 | `DISCORD_WEBHOOK_URL`  | If using Discord  | Discord Webhook URL                                                                                                              |
 | `DISCORD_USERNAME`     | Optional          | Override bot username for Discord (default: `AI News Bot`)                                                                       |
 | `DISCORD_AVATAR_URL`   | Optional          | Custom avatar URL for Discord bot                                                                                                |
+
+`NOTIFICATION_METHODS` also accepts `pushplus`, `wechat_push_lite`, and `wechat_official`.
 
 ### Configuration File (config.yaml)
 
@@ -663,10 +696,30 @@ NOTIFICATION_METHODS=discord
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR/WEBHOOK/URL
 ```
 
+### WeChat Official Account Test Account
+
+```env
+NOTIFICATION_METHODS=wechat_official
+WECHAT_OFFICIAL_APP_ID=your_wechat_official_app_id_here
+WECHAT_OFFICIAL_APP_SECRET=your_wechat_official_app_secret_here
+WECHAT_OFFICIAL_OPENID=your_test_account_openid_here
+WECHAT_OFFICIAL_TEMPLATE_ID=your_template_id_here
+```
+
+The template should contain these fields: `first`, `keyword1`, `keyword2`, `keyword3`, and `remark`.
+
+### Self-hosted WeChat Push Lite
+
+```env
+NOTIFICATION_METHODS=wechat_push_lite
+WECHAT_PUSH_LITE_URL=http://127.0.0.1:8000/api/send
+WECHAT_PUSH_LITE_TOKEN=your_push_api_token_here
+```
+
 ### Multiple Channels
 
 ```env
-NOTIFICATION_METHODS=email,slack,telegram,discord
+NOTIFICATION_METHODS=email,slack,telegram,discord,wechat_official
 ```
 
 ## Email Format
@@ -765,6 +818,31 @@ Compatible with:
 - Microsoft Teams
 - Custom webhook endpoints
 - Any service that accepts JSON webhooks
+
+### WeChat Official Account Test Account
+
+This channel sends a WeChat test account template message directly from GitHub Actions. The message links to the published digest page.
+
+```env
+NOTIFICATION_METHODS=wechat_official
+WECHAT_OFFICIAL_APP_ID=your_wechat_official_app_id_here
+WECHAT_OFFICIAL_APP_SECRET=your_wechat_official_app_secret_here
+WECHAT_OFFICIAL_OPENID=your_test_account_openid_here
+WECHAT_OFFICIAL_TEMPLATE_ID=your_template_id_here
+```
+
+### Self-hosted WeChat Push Lite
+
+This channel sends the generated Markdown digest to your local `wechat-push-lite` backend.
+Run the backend first, then configure the AI News Bot environment:
+
+```env
+NOTIFICATION_METHODS=wechat_push_lite
+WECHAT_PUSH_LITE_URL=http://127.0.0.1:8000/api/send
+WECHAT_PUSH_LITE_TOKEN=your_push_api_token_here
+```
+
+`WECHAT_PUSH_LITE_TOKEN` must match the backend `PUSH_API_TOKEN`.
 
 ### Slack Setup
 

@@ -2,14 +2,130 @@
 News fetcher module - Fetches real-time AI news from various sources
 """
 import requests
+import re
+from html import unescape
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 import xml.etree.ElementTree as ET
+from html.parser import HTMLParser
+from urllib.parse import urlparse
 from ..logger import setup_logger
 
 
 logger = setup_logger(__name__)
+
+
+
+class _ArticleTextExtractor(HTMLParser):
+    """Extract readable text from an HTML document."""
+
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"script", "style", "noscript", "svg", "nav", "footer", "form"}:
+            self._skip_depth += 1
+        elif tag in {"p", "h1", "h2", "h3", "li", "article", "section", "br"}:
+            self.parts.append(" ")
+
+    def handle_endtag(self, tag):
+        if tag in {"script", "style", "noscript", "svg", "nav", "footer", "form"} and self._skip_depth:
+            self._skip_depth -= 1
+        elif tag in {"p", "h1", "h2", "h3", "li", "article", "section", "br"}:
+            self.parts.append(" ")
+
+    def handle_data(self, data):
+        if self._skip_depth == 0 and data.strip():
+            self.parts.append(data.strip())
+
+    def get_text(self) -> str:
+        return re.sub(r"\s+", " ", " ".join(self.parts)).strip()
+
+
+class ArticleVerifier:
+    """Verify RSS items against their original article pages."""
+
+    def __init__(
+        self,
+        source_domains: Optional[Dict[str, List[str]]] = None,
+        min_text_chars: int = 400,
+        max_text_chars: int = 6000,
+        timeout: int = 10,
+    ):
+        self.source_domains = source_domains or {}
+        self.min_text_chars = min_text_chars
+        self.max_text_chars = max_text_chars
+        self.timeout = timeout
+
+    def verify_item(self, item: Dict[str, str]) -> Optional[Dict[str, str]]:
+        """Return a verified copy of the item, or None if provenance checks fail."""
+        source = item.get("source", "")
+        link = item.get("link", "")
+        if not self._is_allowed_source_link(source, link):
+            logger.warning(f"Article verification rejected domain: {source} -> {link}")
+            return None
+
+        article_text = self.fetch_article_text(link)
+        if len(article_text) < self.min_text_chars:
+            logger.warning(f"Article verification rejected short body: {source} -> {link}")
+            return None
+
+        if not self._title_matches_text(item.get("title", ""), article_text):
+            logger.warning(f"Article verification rejected title mismatch: {source} -> {link}")
+            return None
+
+        verified = dict(item)
+        verified["verification_status"] = "body_verified"
+        verified["verified_text"] = article_text[:self.max_text_chars]
+        verified["verified_source_domain"] = urlparse(link).hostname or ""
+        return verified
+
+    def fetch_article_text(self, url: str) -> str:
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            response = requests.get(url, headers=headers, timeout=self.timeout)
+            response.raise_for_status()
+            headers_obj = getattr(response, "headers", {}) or {}
+            content_type = str(headers_obj.get("content-type", "")) if hasattr(headers_obj, "get") else ""
+            if "pdf" in content_type.lower():
+                return ""
+            encoding = getattr(response, "encoding", None) or getattr(response, "apparent_encoding", None)
+            if not isinstance(encoding, str):
+                encoding = "utf-8"
+            html = response.content.decode(encoding, errors="replace")
+            extractor = _ArticleTextExtractor()
+            extractor.feed(html)
+            return unescape(extractor.get_text())
+        except Exception as e:
+            logger.warning(f"Article verification failed to fetch body {url}: {str(e)}")
+            return ""
+
+    def _is_allowed_source_link(self, source: str, link: str) -> bool:
+        host = (urlparse(link).hostname or "").lower()
+        if not host:
+            return False
+        allowed_domains = self.source_domains.get(source, [])
+        return any(host == domain or host.endswith(f".{domain}") for domain in allowed_domains)
+
+    def _title_matches_text(self, title: str, text: str) -> bool:
+        tokens = self._significant_tokens(title)
+        if not tokens:
+            return True
+        text_norm = " ".join(self._significant_tokens(text))
+        matched = sum(1 for token in set(tokens) if token in text_norm)
+        required = min(2, max(1, len(set(tokens)) // 3))
+        return matched >= required
+
+    def _significant_tokens(self, text: str) -> List[str]:
+        return [
+            token for token in re.findall(r"[a-z0-9\u4e00-\u9fff]+", unescape(text).casefold())
+            if len(token) >= 3
+        ]
 
 
 class NewsFetcher:
@@ -17,35 +133,53 @@ class NewsFetcher:
 
     def __init__(self):
         """Initialize the news fetcher"""
-        # RSS feed sources for AI news (reliable sources only)
+        # RSS feed sources for AI news (official and research sources only)
         self.rss_feeds = {
-            # Major Tech Media
-            "TechCrunch AI": "https://techcrunch.com/tag/artificial-intelligence/feed/",
-            "VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
-            "MIT Technology Review": "https://www.technologyreview.com/topic/artificial-intelligence/feed/",
-            "Ars Technica AI": "https://arstechnica.com/tag/ai/feed/",
-            "Wired": "https://www.wired.com/feed/rss",
-            "The Next Web": "https://thenextweb.com/feed",
-            "The Verge AI": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
-            "Engadget": "https://www.engadget.com/rss.xml",
-
-            # Official AI Company Blogs
+            "OpenAI News": "https://openai.com/news/rss.xml",
             "Google AI Blog": "https://blog.google/technology/ai/rss/",
-            "Anthropic Blog": "https://www.anthropic.com/feed.xml",
-            "Microsoft AI Blog": "https://blogs.microsoft.com/ai/feed/",
+            "Google DeepMind Blog": "https://deepmind.google/blog/rss.xml",
+            "Google Research Blog": "https://research.google/blog/rss/",
             "HuggingFace Blog": "https://huggingface.co/blog/feed.xml",
-
-            # Research & Academic
+            "NVIDIA Deep Learning Blog": "https://blogs.nvidia.com/blog/category/deep-learning/feed/",
+            "AWS Machine Learning Blog": "https://aws.amazon.com/blogs/machine-learning/feed/",
+            "GitHub Blog AI": "https://github.blog/tag/ai/feed/",
             "arXiv AI": "https://rss.arxiv.org/rss/cs.AI",
             "arXiv Machine Learning": "https://rss.arxiv.org/rss/cs.LG",
             "arXiv Computer Vision": "https://rss.arxiv.org/rss/cs.CV",
             "arXiv NLP": "https://rss.arxiv.org/rss/cs.CL",
-
-            # Independent Voices & Community
-            "Simon Willison": "https://simonwillison.net/atom/entries/",
-            "Hacker News": "https://news.ycombinator.com/rss",
-            "Reddit r/LocalLLaMA": "https://www.reddit.com/r/LocalLLaMA/.rss",
         }
+
+        self.source_tiers = {
+            "OpenAI News": "official",
+            "Google AI Blog": "official",
+            "Google DeepMind Blog": "official",
+            "Google Research Blog": "official",
+            "HuggingFace Blog": "official",
+            "NVIDIA Deep Learning Blog": "official",
+            "AWS Machine Learning Blog": "official",
+            "GitHub Blog AI": "official",
+            "arXiv AI": "research",
+            "arXiv Machine Learning": "research",
+            "arXiv Computer Vision": "research",
+            "arXiv NLP": "research",
+        }
+
+
+        self.source_domains = {
+            "OpenAI News": ["openai.com"],
+            "Google AI Blog": ["blog.google"],
+            "Google DeepMind Blog": ["deepmind.google"],
+            "Google Research Blog": ["research.google"],
+            "HuggingFace Blog": ["huggingface.co"],
+            "NVIDIA Deep Learning Blog": ["blogs.nvidia.com", "nvidia.com"],
+            "AWS Machine Learning Blog": ["aws.amazon.com"],
+            "GitHub Blog AI": ["github.blog"],
+            "arXiv AI": ["arxiv.org"],
+            "arXiv Machine Learning": ["arxiv.org"],
+            "arXiv Computer Vision": ["arxiv.org"],
+            "arXiv NLP": ["arxiv.org"],
+        }
+        self.article_verifier = ArticleVerifier(self.source_domains)
 
         # Chinese AI news sources (zh)
         self.chinese_feeds = {
@@ -177,6 +311,19 @@ class NewsFetcher:
             "Google News AI (HI)": "https://news.google.com/rss/search?q=कृत्रिम+बुद्धिमत्ता&hl=hi&gl=IN&ceid=IN:hi",
         }
 
+        # Regional feeds are disabled until they have first-party or paper-level provenance.
+        self.chinese_feeds = {}
+        self.japanese_feeds = {}
+        self.french_feeds = {}
+        self.spanish_feeds = {}
+        self.german_feeds = {}
+        self.korean_feeds = {}
+        self.portuguese_feeds = {}
+        self.italian_feeds = {}
+        self.russian_feeds = {}
+        self.dutch_feeds = {}
+        self.arabic_feeds = {}
+        self.hindi_feeds = {}
 
     def fetch_rss_feed(self, feed_url: str, max_items: int = 10) -> List[Dict[str, str]]:
         """
@@ -242,9 +389,10 @@ class NewsFetcher:
             logger.error(f"Failed to fetch RSS feed {feed_url}: {str(e)}")
             return []
 
-    def _clean_html(self, text: str) -> str:
+    def _clean_html(self, text: Optional[str]) -> str:
         """Remove HTML tags from text"""
-        import re
+        if not text:
+            return ''
         clean = re.compile('<.*?>')
         return re.sub(clean, '', text).strip()
 
@@ -291,7 +439,6 @@ class NewsFetcher:
             pub_dt = self._parse_pubdate(item.get("published", ""))
             if pub_dt is None:
                 unparseable += 1
-                kept.append(item)  # 无法解析日期的保留，避免误杀
             elif pub_dt >= cutoff:
                 kept.append(item)
             else:
@@ -300,14 +447,81 @@ class NewsFetcher:
         if dropped > 0:
             logger.info(f"Time filter: dropped {dropped} items older than {max_age_hours}h")
         if unparseable > 0:
-            logger.info(f"Time filter: kept {unparseable} items with unparseable dates")
+            logger.info(f"Time filter: dropped {unparseable} items with unparseable dates")
 
         return kept
+
+    def _deduplicate_items(self, items: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """Keep one item per normalized title, preferring higher-trust sources."""
+        unique_items = {}
+        tier_rank = {"official": 2, "research": 1}
+
+        for item in items:
+            title = unescape(item.get("title", "")).casefold()
+            key = re.sub(r"\W+", "", title) or item.get("link", "").strip()
+            if not key:
+                continue
+
+            existing = unique_items.get(key)
+            if existing is None:
+                unique_items[key] = item
+                continue
+
+            current_rank = tier_rank.get(item.get("source_tier", ""), 0)
+            existing_rank = tier_rank.get(existing.get("source_tier", ""), 0)
+            if current_rank > existing_rank:
+                unique_items[key] = item
+
+        return list(unique_items.values())
+
+
+
+    def _iter_items_by_source_rounds(self, items: List[Dict[str, str]]):
+        items_by_source = {}
+        for item in items:
+            items_by_source.setdefault(item.get("source", ""), []).append(item)
+
+        while items_by_source:
+            for source in list(items_by_source.keys()):
+                source_items = items_by_source[source]
+                if source_items:
+                    yield source_items.pop(0)
+                if not source_items:
+                    del items_by_source[source]
+
+    def _verify_news_items(
+        self,
+        news_data: Dict[str, List[Dict[str, str]]],
+        max_articles_to_verify: Optional[int] = None,
+    ) -> Dict[str, List[Dict[str, str]]]:
+        remaining = max_articles_to_verify
+        verified_data = {'international': [], 'domestic': []}
+
+        for section in ('international', 'domestic'):
+            for item in self._iter_items_by_source_rounds(news_data[section]):
+                if remaining is not None and remaining <= 0:
+                    logger.info("Article verification limit reached")
+                    return verified_data
+
+                if remaining is not None:
+                    remaining -= 1
+
+                verified_item = self.article_verifier.verify_item(item)
+                if verified_item:
+                    verified_data[section].append(verified_item)
+
+        logger.info(
+            f"Article verification kept {len(verified_data['international'])} international "
+            f"and {len(verified_data['domestic'])} domestic items"
+        )
+        return verified_data
 
     def fetch_recent_news(
         self,
         language: str = "en",
-        max_items_per_source: int = 5
+        max_items_per_source: int = 5,
+        strict_verification: bool = False,
+        max_articles_to_verify: Optional[int] = None,
     ) -> Dict[str, List[Dict[str, str]]]:
         """
         Fetch recent AI news from all configured sources.
@@ -315,6 +529,8 @@ class NewsFetcher:
         Args:
             language: Language code for the response
             max_items_per_source: Maximum items to fetch per source
+            strict_verification: Whether to require source-domain and article-body verification
+            max_articles_to_verify: Maximum original article pages to fetch for verification
 
         Returns:
             Dictionary with 'international' and 'domestic' news lists
@@ -331,6 +547,7 @@ class NewsFetcher:
             items = self.fetch_rss_feed(feed_url, max_items_per_source)
             for item in items:
                 item['source'] = source_name
+                item['source_tier'] = self.source_tiers[source_name]
                 all_news['international'].append(item)
 
         # Fetch domestic news based on language
@@ -352,17 +569,29 @@ class NewsFetcher:
         feeds = language_feeds_map.get(language)
         if not feeds:
             logger.warning(f"No domestic feeds configured for language: {language}, using international only")
-            all_news['international'] = self._filter_by_time(all_news['international'])
+            all_news['international'] = self._deduplicate_items(
+                self._filter_by_time(all_news['international'])
+            )
+            if strict_verification:
+                all_news = self._verify_news_items(all_news, max_articles_to_verify)
             return all_news
 
         for source_name, feed_url in feeds.items():
             items = self.fetch_rss_feed(feed_url, max_items_per_source)
             for item in items:
                 item['source'] = source_name
+                item['source_tier'] = self.source_tiers.get(source_name, "editorial")
                 all_news['domestic'].append(item)
 
-        all_news['international'] = self._filter_by_time(all_news['international'])
-        all_news['domestic'] = self._filter_by_time(all_news['domestic'])
+        all_news['international'] = self._deduplicate_items(
+            self._filter_by_time(all_news['international'])
+        )
+        all_news['domestic'] = self._deduplicate_items(
+            self._filter_by_time(all_news['domestic'])
+        )
+
+        if strict_verification:
+            all_news = self._verify_news_items(all_news, max_articles_to_verify)
 
         logger.info(
             f"Fetched {len(all_news['international'])} international news items "
@@ -388,7 +617,11 @@ class NewsFetcher:
             for i, item in enumerate(news_data['international'], 1):
                 formatted += f"### {i}. {item['title']}\n"
                 formatted += f"**Source:** {item['source']}\n"
-                if item['description']:
+                if item.get('verification_status'):
+                    formatted += f"**Verification:** {item['verification_status']}\n"
+                if item.get('verified_text'):
+                    formatted += f"**Verified Article Text:** {item['verified_text'][:1200]}...\n"
+                elif item['description']:
                     formatted += f"**Description:** {item['description'][:300]}...\n"
                 formatted += f"**Link:** {item['link']}\n"
                 if item['published']:
@@ -400,7 +633,11 @@ class NewsFetcher:
             for i, item in enumerate(news_data['domestic'], 1):
                 formatted += f"### {i}. {item['title']}\n"
                 formatted += f"**Source:** {item['source']}\n"
-                if item['description']:
+                if item.get('verification_status'):
+                    formatted += f"**Verification:** {item['verification_status']}\n"
+                if item.get('verified_text'):
+                    formatted += f"**Verified Article Text:** {item['verified_text'][:1200]}...\n"
+                elif item['description']:
                     formatted += f"**Description:** {item['description'][:300]}...\n"
                 formatted += f"**Link:** {item['link']}\n"
                 if item['published']:

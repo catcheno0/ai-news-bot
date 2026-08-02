@@ -8,6 +8,7 @@ import sys
 from datetime import datetime
 from src.config import Config
 from src.logger import setup_logger
+from src.news.pages import DigestPagePublisher
 from src.news import NewsGenerator
 from src.notifiers import (
     EmailNotifier,
@@ -15,8 +16,18 @@ from src.notifiers import (
     SlackNotifier,
     TelegramNotifier,
     DiscordNotifier,
-    PushPlusNotifier
+    PushPlusNotifier,
+    WeChatPushLiteNotifier,
+    WeChatOfficialNotifier
 )
+
+
+def _append_page_link(content: str, page_url: str) -> str:
+    """Append the public digest URL to notification content when available."""
+    if not page_url:
+        return content
+
+    return f"{content}\n\n---\n\nFull digest: {page_url}"
 
 
 def main():
@@ -43,6 +54,7 @@ def main():
             logger.info(f"LLM Model: {config.llm_model}")
         logger.info(f"Languages: {', '.join(languages)}")
         logger.info(f"Web Search: {config.enable_web_search}")
+        logger.info(f"Strict Verification: {config.strict_verification}")
         logger.info("=" * 60)
 
         # Initialize news generator once
@@ -57,6 +69,14 @@ def main():
         # Get enabled notification methods
         notification_methods = config.notification_methods
         logger.info(f"Enabled notification methods: {notification_methods}")
+
+        page_publisher = None
+        if config.pages_enabled:
+            page_publisher = DigestPagePublisher(
+                output_dir=config.pages_output_dir,
+                site_url=config.pages_site_url,
+            )
+            logger.info(f"GitHub Pages output enabled: {config.pages_output_dir}")
 
         # Track overall results
         overall_results = {"sent": [], "failed": []}
@@ -74,7 +94,11 @@ def main():
                     language=language,
                     max_items_per_source=config.max_items_per_source,
                     stage1_template=config.stage1_prompt_template,
-                    stage2_template=config.stage2_prompt_template
+                    stage2_template=config.stage2_prompt_template,
+                    strict_verification=config.strict_verification,
+                    verification_fail_policy=config.verification_fail_policy,
+                    min_verified_items=config.min_verified_items,
+                    max_articles_to_verify=config.max_articles_to_verify
                 )
 
                 logger.info(f"News digest generated for {language.upper()} ({len(news_digest)} characters)")
@@ -86,6 +110,22 @@ def main():
                 logger.info(preview)
                 logger.info("-" * 60)
 
+                notification_content = news_digest
+                notification_data = {}
+                if page_publisher:
+                    publication = page_publisher.publish(
+                        news_digest,
+                        language=language,
+                        generated_at=datetime.now(),
+                        primary=language == languages[0],
+                    )
+                    notification_content = _append_page_link(
+                        news_digest,
+                        publication.latest_url,
+                    )
+                    notification_data["page_url"] = publication.latest_url
+                    logger.info(f"Digest page written: {publication.latest_path}")
+
                 # Track notification results for this language
                 lang_results = {"sent": [], "failed": []}
 
@@ -93,7 +133,7 @@ def main():
                 if "email" in notification_methods:
                     logger.info(f"Sending email notification for {language.upper()}...")
                     email_notifier = EmailNotifier()
-                    if email_notifier.send(news_digest, language=language):
+                    if email_notifier.send(notification_content, language=language):
                         lang_results["sent"].append("email")
                         logger.info(f"Email notification sent successfully for {language.upper()}")
                     else:
@@ -104,7 +144,7 @@ def main():
                 if "webhook" in notification_methods:
                     logger.info(f"Sending webhook notification for {language.upper()}...")
                     webhook_notifier = WebhookNotifier()
-                    if webhook_notifier.send(news_digest, language=language):
+                    if webhook_notifier.send(notification_content, language=language):
                         lang_results["sent"].append("webhook")
                         logger.info(f"Webhook notification sent successfully for {language.upper()}")
                     else:
@@ -115,7 +155,7 @@ def main():
                 if "slack" in notification_methods:
                     logger.info(f"Sending Slack notification for {language.upper()}...")
                     slack_notifier = SlackNotifier()
-                    if slack_notifier.send(news_digest, language=language):
+                    if slack_notifier.send(notification_content, language=language):
                         lang_results["sent"].append("slack")
                         logger.info(f"Slack notification sent successfully for {language.upper()}")
                     else:
@@ -126,7 +166,7 @@ def main():
                 if "telegram" in notification_methods:
                     logger.info(f"Sending Telegram notification for {language.upper()}...")
                     telegram_notifier = TelegramNotifier()
-                    if telegram_notifier.send(news_digest, language=language):
+                    if telegram_notifier.send(notification_content, language=language):
                         lang_results["sent"].append("telegram")
                         logger.info(f"Telegram notification sent successfully for {language.upper()}")
                     else:
@@ -137,7 +177,7 @@ def main():
                 if "discord" in notification_methods:
                     logger.info(f"Sending Discord notification for {language.upper()}...")
                     discord_notifier = DiscordNotifier()
-                    if discord_notifier.send(news_digest, language=language):
+                    if discord_notifier.send(notification_content, language=language):
                         lang_results["sent"].append("discord")
                         logger.info(f"Discord notification sent successfully for {language.upper()}")
                     else:
@@ -148,12 +188,38 @@ def main():
                 if "pushplus" in notification_methods:
                     logger.info(f"Sending PushPlus notification for {language.upper()}...")
                     pushplus_notifier = PushPlusNotifier()
-                    if pushplus_notifier.send(news_digest, language=language):
+                    if pushplus_notifier.send(notification_content, language=language):
                         lang_results["sent"].append("pushplus")
                         logger.info(f"PushPlus notification sent successfully for {language.upper()}")
                     else:
                         lang_results["failed"].append("pushplus")
                         logger.warning(f"PushPlus notification failed for {language.upper()}")
+
+                # Send self-hosted WeChat Push Lite notification if enabled
+                if "wechat_push_lite" in notification_methods:
+                    logger.info(f"Sending WeChat Push Lite notification for {language.upper()}...")
+                    wechat_push_lite_notifier = WeChatPushLiteNotifier()
+                    if wechat_push_lite_notifier.send(notification_content, language=language):
+                        lang_results["sent"].append("wechat_push_lite")
+                        logger.info(f"WeChat Push Lite notification sent successfully for {language.upper()}")
+                    else:
+                        lang_results["failed"].append("wechat_push_lite")
+                        logger.warning(f"WeChat Push Lite notification failed for {language.upper()}")
+
+                # Send WeChat Official Account test notification if enabled
+                if "wechat_official" in notification_methods:
+                    logger.info(f"Sending WeChat Official Account notification for {language.upper()}...")
+                    wechat_official_notifier = WeChatOfficialNotifier()
+                    if wechat_official_notifier.send(
+                        notification_content,
+                        additional_data=notification_data,
+                        language=language,
+                    ):
+                        lang_results["sent"].append("wechat_official")
+                        logger.info(f"WeChat Official Account notification sent successfully for {language.upper()}")
+                    else:
+                        lang_results["failed"].append("wechat_official")
+                        logger.warning(f"WeChat Official Account notification failed for {language.upper()}")
 
                 # Update overall results
                 for method in lang_results["sent"]:

@@ -112,7 +112,7 @@ class Config:
 
 ## YOUR TASK - STAGE 1: NEWS SELECTION
 
-You are a senior AI industry analyst. Analyze the {total_items} news items above and select exactly 15-20 of the highest-quality items.
+You are a senior AI industry analyst. Analyze the {total_items} verified news items above and select 15-20 of the highest-quality items. If fewer than 15 verified items are available, select all worthwhile verified items.
 
 ### SELECTION CRITERIA:
 - ✅ Groundbreaking research or technical breakthroughs
@@ -121,7 +121,9 @@ You are a senior AI industry analyst. Analyze the {total_items} news items above
 - ✅ Large funding rounds or M&A activities
 - ✅ Balanced coverage across categories (LLM, Agents, Research, Products, etc.)
 - ✅ Include both international and domestic news when available
-- ✅ Prefer primary sources over secondary reporting
+- ✅ Only select items with an "official" or "research" source tier
+- ✅ Use the supplied original link as the sole source of factual claims
+- ✅ Only select items marked **Verification:** body_verified when present
 
 ### OUTPUT FORMAT:
 Return ONLY a JSON array of selected news IDs. No explanations, no markdown, just the JSON array.
@@ -170,6 +172,7 @@ For each news item:
 - ✅ Include specific numbers and data
 - ✅ Balanced coverage across categories
 - ✅ All sources as clickable markdown links
+- ✅ Treat **Verified Article Text** as the only factual basis for summaries
 
 ## AVOID:
 ❌ Generic statements
@@ -235,6 +238,56 @@ For each news item:
     def max_items_per_source(self) -> int:
         """Maximum news items to fetch per source"""
         return self.config_data.get("news", {}).get("max_items_per_source", 5)
+
+
+    @property
+    def strict_verification(self) -> bool:
+        """Whether original article verification is required before generation."""
+        config_value = self.config_data.get("news", {}).get("strict_verification")
+        if config_value is not None:
+            return bool(config_value)
+        env_value = os.getenv("STRICT_VERIFICATION", "false").strip().lower()
+        return env_value in ("true", "1", "yes", "on")
+
+    @property
+    def verification_fail_policy(self) -> str:
+        """How to handle items that fail verification."""
+        value = str(self.config_data.get("news", {}).get("verification_fail_policy", "skip")).strip().lower()
+        return value if value in ("skip", "fail") else "skip"
+
+    @property
+    def min_verified_items(self) -> int:
+        """Minimum verified item count required before sending a digest."""
+        return int(self.config_data.get("news", {}).get("min_verified_items", 8))
+
+    @property
+    def max_articles_to_verify(self) -> int:
+        """Maximum original articles to fetch and verify per digest run."""
+        return int(self.config_data.get("news", {}).get("max_articles_to_verify", 40))
+
+    @property
+    def pages_enabled(self) -> bool:
+        """Whether to publish generated digests as static GitHub Pages files."""
+        env_value = os.getenv("PAGES_ENABLED", "").strip().lower()
+        if env_value:
+            return env_value in ("true", "1", "yes", "on")
+        return bool(self.config_data.get("pages", {}).get("enabled", False))
+
+    @property
+    def pages_output_dir(self) -> str:
+        """Directory where static digest pages are written."""
+        env_value = os.getenv("PAGES_OUTPUT_DIR", "").strip()
+        if env_value:
+            return env_value
+        return str(self.config_data.get("pages", {}).get("output_dir", "public"))
+
+    @property
+    def pages_site_url(self) -> str:
+        """Public base URL for GitHub Pages digest links."""
+        env_value = os.getenv("PAGES_SITE_URL", "").strip()
+        if env_value:
+            return env_value.rstrip("/")
+        return str(self.config_data.get("pages", {}).get("site_url", "")).rstrip("/")
 
     @property
     def llm_provider(self) -> str:

@@ -73,8 +73,14 @@ class NewsGenerator:
 
                 formatted += f"### [{news_id}] {item['title']}\n"
                 formatted += f"**Source:** {item['source']}\n"
-                if item['description']:
+                formatted += f"**Source Tier:** {item.get('source_tier', 'unknown')}\n"
+                if item.get('verification_status'):
+                    formatted += f"**Verification:** {item['verification_status']}\n"
+                if item.get('verified_text'):
+                    formatted += f"**Verified Article Text:** {item['verified_text'][:2500]}...\n"
+                elif item['description']:
                     formatted += f"**Description:** {item['description'][:400]}...\n"
+                formatted += f"**Link:** {item.get('link', '')}\n"
                 if item['published']:
                     formatted += f"**Published:** {item['published']}\n"
                 formatted += "\n"
@@ -89,8 +95,14 @@ class NewsGenerator:
 
                 formatted += f"### [{news_id}] {item['title']}\n"
                 formatted += f"**Source:** {item['source']}\n"
-                if item['description']:
+                formatted += f"**Source Tier:** {item.get('source_tier', 'unknown')}\n"
+                if item.get('verification_status'):
+                    formatted += f"**Verification:** {item['verification_status']}\n"
+                if item.get('verified_text'):
+                    formatted += f"**Verified Article Text:** {item['verified_text'][:2500]}...\n"
+                elif item['description']:
                     formatted += f"**Description:** {item['description'][:400]}...\n"
+                formatted += f"**Link:** {item.get('link', '')}\n"
                 if item['published']:
                     formatted += f"**Published:** {item['published']}\n"
                 formatted += "\n"
@@ -98,13 +110,108 @@ class NewsGenerator:
 
         return formatted, news_items
 
+
+    def _format_selected_news(self, selected_ids: List[str], news_items: Dict[str, Dict]) -> str:
+        formatted_selected = "# Selected High-Quality AI News Items\n\n"
+        for news_id in selected_ids:
+            item = news_items[news_id]
+            formatted_selected += f"### [{news_id}] {item['title']}\n"
+            formatted_selected += f"**Source:** {item['source']}\n"
+            formatted_selected += f"**Source Tier:** {item.get('source_tier', 'unknown')}\n"
+            if item.get('verification_status'):
+                formatted_selected += f"**Verification:** {item['verification_status']}\n"
+            content = item.get('verified_text') or item.get('description', '')
+            if content:
+                label = "Verified Article Text" if item.get('verified_text') else "Content"
+                formatted_selected += f"**{label}:** {content}\n"
+            formatted_selected += f"**Link:** {item['link']}\n"
+            if item['published']:
+                formatted_selected += f"**Published:** {item['published']}\n"
+            formatted_selected += "\n"
+        return formatted_selected
+
+    def _build_summarization_prompt(
+        self,
+        stage2_template: str,
+        selected_ids: List[str],
+        news_items: Dict[str, Dict],
+        language: str,
+    ) -> str:
+        formatted_selected = self._format_selected_news(selected_ids, news_items)
+        prompt = stage2_template.format(
+            count=len(selected_ids),
+            selected_news=formatted_selected
+        )
+        if language and language.lower() != "en":
+            language_name = LANGUAGE_NAMES.get(language.lower(), language.upper())
+            prompt += f"\n\nIMPORTANT: Please respond entirely in {language_name}."
+        return prompt
+
+    def _count_verified_items(self, news_data: Dict) -> int:
+        return sum(
+            1
+            for section in ("international", "domestic")
+            for item in news_data.get(section, [])
+            if item.get("verification_status") == "body_verified" and item.get("verified_text")
+        )
+
+    def _parse_digest_verification_response(self, response_text: str) -> Dict:
+        json_match = re.search(r'\{[\s\S]*?\}', response_text)
+        if not json_match:
+            return {"passed": False, "unsupported_news_ids": [], "reason": "No JSON object returned"}
+        try:
+            data = json.loads(json_match.group(0))
+        except json.JSONDecodeError:
+            return {"passed": False, "unsupported_news_ids": [], "reason": "Invalid JSON returned"}
+        unsupported = data.get("unsupported_news_ids", [])
+        if not isinstance(unsupported, list):
+            unsupported = []
+        passed_value = data.get("passed", False)
+        passed = passed_value is True or str(passed_value).strip().lower() == "true"
+        return {
+            "passed": bool(passed and not unsupported),
+            "unsupported_news_ids": [str(news_id) for news_id in unsupported],
+            "reason": str(data.get("reason", "")),
+        }
+
+    def _verify_digest_against_sources(
+        self,
+        digest_text: str,
+        selected_ids: List[str],
+        news_items: Dict[str, Dict],
+    ) -> Dict:
+        source_material = self._format_selected_news(selected_ids, news_items)
+        verification_prompt = f"""You are a strict fact-checking gate for an AI news digest.
+
+Compare the digest against the verified source material below. A claim is supported only if it is directly present in the verified article text, title, source, link, or publication time. Do not use outside knowledge.
+
+Return ONLY this JSON object:
+{{"passed": true|false, "unsupported_news_ids": ["INT-1"], "reason": "short reason"}}
+
+## VERIFIED SOURCE MATERIAL
+{source_material}
+
+## DIGEST TO CHECK
+{digest_text}
+"""
+        response = self.provider.generate(
+            messages=[{"role": "user", "content": verification_prompt}],
+            max_tokens=1200,
+            temperature=0,
+        )
+        return self._parse_digest_verification_response(response)
+
     def generate_news_digest_from_sources(
         self,
         max_tokens: int = 8000,
         language: str = "en",
         max_items_per_source: int = 5,
         stage1_template: Optional[str] = None,
-        stage2_template: Optional[str] = None
+        stage2_template: Optional[str] = None,
+        strict_verification: bool = False,
+        verification_fail_policy: str = "skip",
+        min_verified_items: int = 0,
+        max_articles_to_verify: Optional[int] = None,
     ) -> str:
         """
         Fetch real-time news and generate a digest using two-stage prompt chaining:
@@ -117,6 +224,10 @@ class NewsGenerator:
             max_items_per_source: Maximum items to fetch per source
             stage1_template: Optional Stage 1 prompt template (from config)
             stage2_template: Optional Stage 2 prompt template (from config)
+            strict_verification: Whether to verify source bodies and fact-check the final digest
+            verification_fail_policy: "skip" removes unsupported selected items once; "fail" aborts
+            min_verified_items: Minimum verified source items required before generation
+            max_articles_to_verify: Maximum original article pages to fetch for verification
 
         Returns:
             Generated news digest as string
@@ -127,10 +238,22 @@ class NewsGenerator:
         try:
             # Fetch real-time news
             logger.info("Fetching real-time AI news from sources...")
-            news_data = self.news_fetcher.fetch_recent_news(
-                language=language,
-                max_items_per_source=max_items_per_source
-            )
+            fetch_kwargs = {
+                "language": language,
+                "max_items_per_source": max_items_per_source,
+            }
+            if strict_verification:
+                fetch_kwargs["strict_verification"] = True
+                fetch_kwargs["max_articles_to_verify"] = max_articles_to_verify
+            news_data = self.news_fetcher.fetch_recent_news(**fetch_kwargs)
+
+
+            if strict_verification:
+                verified_count = self._count_verified_items(news_data)
+                if verified_count < min_verified_items:
+                    raise Exception(
+                        f"Only {verified_count} verified news items available; minimum is {min_verified_items}"
+                    )
 
             if not news_data['international'] and not news_data['domestic']:
                 error_msg = "No news items fetched from RSS sources. Please check your network connection or RSS feed availability."
@@ -199,19 +322,6 @@ class NewsGenerator:
             # ============================================================
             logger.info(f"Stage 2: Creating detailed summaries for selected items...")
 
-            # Format selected news for summarization
-            formatted_selected = "# Selected High-Quality AI News Items\n\n"
-            for news_id in selected_ids:
-                item = news_items[news_id]
-                formatted_selected += f"### [{news_id}] {item['title']}\n"
-                formatted_selected += f"**Source:** {item['source']}\n"
-                if item['description']:
-                    formatted_selected += f"**Content:** {item['description']}\n"
-                formatted_selected += f"**Link:** {item['link']}\n"
-                if item['published']:
-                    formatted_selected += f"**Published:** {item['published']}\n"
-                formatted_selected += "\n"
-
             # Use provided template or load from config
             if stage2_template is None:
                 from ..config import Config
@@ -219,15 +329,12 @@ class NewsGenerator:
                 stage2_template = config.stage2_prompt_template
 
             # Format Stage 2 prompt with placeholders
-            summarization_prompt = stage2_template.format(
-                count=len(selected_ids),
-                selected_news=formatted_selected
+            summarization_prompt = self._build_summarization_prompt(
+                stage2_template,
+                selected_ids,
+                news_items,
+                language,
             )
-
-            # Add language instruction if not English
-            if language and language.lower() != "en":
-                language_name = LANGUAGE_NAMES.get(language.lower(), language.upper())
-                summarization_prompt += f"\n\nIMPORTANT: Please respond entirely in {language_name}."
 
             # Execute Stage 2: Generate detailed summaries
             messages = [{"role": "user", "content": summarization_prompt}]
@@ -235,6 +342,36 @@ class NewsGenerator:
                 messages=messages,
                 max_tokens=max_tokens
             )
+
+
+            if strict_verification:
+                verification = self._verify_digest_against_sources(response_text, selected_ids, news_items)
+                if not verification["passed"]:
+                    unsupported_ids = set(verification["unsupported_news_ids"])
+                    if verification_fail_policy.lower() == "skip" and unsupported_ids:
+                        selected_ids = [news_id for news_id in selected_ids if news_id not in unsupported_ids]
+                        if len(selected_ids) < min_verified_items:
+                            raise Exception(
+                                f"Digest verification removed too many items; {len(selected_ids)} remain, "
+                                f"minimum is {min_verified_items}"
+                            )
+                        logger.warning(
+                            f"Digest verification rejected {sorted(unsupported_ids)}; regenerating digest"
+                        )
+                        summarization_prompt = self._build_summarization_prompt(
+                            stage2_template,
+                            selected_ids,
+                            news_items,
+                            language,
+                        )
+                        response_text = self.provider.generate(
+                            messages=[{"role": "user", "content": summarization_prompt}],
+                            max_tokens=max_tokens
+                        )
+                        verification = self._verify_digest_against_sources(response_text, selected_ids, news_items)
+
+                if not verification["passed"]:
+                    raise Exception(f"Digest verification failed: {verification['reason']}")
 
             # Add footer with GitHub link
             footer = "\n\n---\n\n*Generated by [AI News Bot](https://github.com/giftedunicorn/ai-news-bot) - Your AI-powered news assistant*"

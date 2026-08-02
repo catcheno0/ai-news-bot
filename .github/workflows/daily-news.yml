@@ -5,9 +5,21 @@ on:
   # GitHub native schedule removed to avoid duplicate pushes
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
-  generate-and-send-news:
+  generate-send-and-publish:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout repository
@@ -24,10 +36,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
       - name: Generate and send AI news digest
         env:
           # All values come from GitHub Repository Secrets
-          # Configure at: Settings → Secrets and variables → Actions → Repository secrets
+          # Configure at: Settings -> Secrets and variables -> Actions -> Repository secrets
 
           # ============================================
           # LLM Provider Configuration
@@ -35,7 +50,6 @@ jobs:
 
           # Choose your provider: claude, deepseek, gemini, grok, or openai
           # Set LLM_PROVIDER secret to your choice (default: claude)
-          
           LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
 
           # API Keys (provide the one you're using)
@@ -54,12 +68,10 @@ jobs:
           # ============================================
 
           # Required: Notification methods (comma-separated)
-          # Examples: email, webhook, email,webhook
-          NOTIFICATION_METHODS: ${{ secrets.NOTIFICATION_METHODS }}
+          # Default channel for this deployment
+          NOTIFICATION_METHODS: wechat_official
 
-          # Email Option A: Gmail (Recommended - easiest setup)
-          # Just need your Gmail and an App Password
-          # Get App Password at: https://myaccount.google.com/apppasswords
+          # Email Option A: Gmail
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
@@ -70,14 +82,30 @@ jobs:
           # Optional: Language (defaults to 'en' if not set)
           # Supported: en, zh, es, fr, ja, de, ko, pt, ru, ar, hi, it, nl
           # For multiple languages, separate with commas (e.g., 'en,zh,ja')
-          # The bot will generate and send news for each language separately
           AI_RESPONSE_LANGUAGE: ${{ secrets.AI_RESPONSE_LANGUAGE }}
 
-          # PushPlus 微信推送
-          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          # WeChat Official Account test account
+          WECHAT_OFFICIAL_APP_ID: ${{ secrets.WECHAT_OFFICIAL_APP_ID }}
+          WECHAT_OFFICIAL_APP_SECRET: ${{ secrets.WECHAT_OFFICIAL_APP_SECRET }}
+          WECHAT_OFFICIAL_OPENID: ${{ secrets.WECHAT_OFFICIAL_OPENID }}
+          WECHAT_OFFICIAL_TEMPLATE_ID: ${{ secrets.WECHAT_OFFICIAL_TEMPLATE_ID }}
+
+          # Static digest pages
+          PAGES_ENABLED: "true"
+          PAGES_OUTPUT_DIR: public
+          PAGES_SITE_URL: https://news.my-ai-news.top
 
         run: |
           python main.py
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
       - name: Upload logs on failure
         if: failure()

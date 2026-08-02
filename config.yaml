@@ -22,6 +22,12 @@ news:
   # Maximum news items to fetch per source (fetch more for AI to select from)
   max_items_per_source: 10
 
+  # Strict verification gate: fetch original article pages before selection and summary
+  strict_verification: true
+  verification_fail_policy: skip
+  min_verified_items: 8
+  max_articles_to_verify: 40
+
   # Stage 1: Selection prompt template
   # Placeholders: {total_items}, {formatted_news}
   stage1_prompt_template: |
@@ -29,7 +35,7 @@ news:
 
       ## YOUR TASK - STAGE 1: NEWS SELECTION
 
-      You are a senior AI industry analyst. Analyze the {total_items} news items above and select exactly 15-20 of the highest-quality items.
+      You are a senior AI industry analyst. Analyze the {total_items} verified news items above and select 15-20 of the highest-quality items. If fewer than 15 verified items are available, select all worthwhile verified items.
 
       ### SELECTION CRITERIA:
       - ✅ Groundbreaking research or technical breakthroughs
@@ -38,7 +44,9 @@ news:
       - ✅ Large funding rounds or M&A activities
       - ✅ Balanced coverage across categories (LLM, Agents, Research, Products, etc.)
       - ✅ Include both international and domestic news when available
-      - ✅ Prefer primary sources over secondary reporting
+      - ✅ Only select items with an "official" or "research" source tier
+      - ✅ Use the supplied original link as the sole source of factual claims
+      - ✅ Only select items marked **Verification:** body_verified when present
 
       ### QUALITY FILTER (apply before selection):
       Content that meets ANY of the following should be DEPRIORITIZED or EXCLUDED:
@@ -124,6 +132,7 @@ news:
       - ✅ Prioritize accuracy over speculation
       - ✅ All sources must have clickable markdown links
       - ✅ Only summarize the actual news items provided — do NOT fabricate or include example content
+      - ✅ Treat **Verified Article Text** as the only factual basis for summaries
 
       ## AVOID:
       ❌ Generic statements without specifics

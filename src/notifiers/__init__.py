@@ -7,6 +7,8 @@ from .slack_notifier import SlackNotifier
 from .telegram_notifier import TelegramNotifier
 from .discord_notifier import DiscordNotifier
 from .pushplus_notifier import PushPlusNotifier
+from .wechat_push_lite_notifier import WeChatPushLiteNotifier
+from .wechat_official_notifier import WeChatOfficialNotifier
 
 __all__ = [
     "EmailNotifier",
@@ -14,5 +16,7 @@ __all__ = [
     "SlackNotifier",
     "TelegramNotifier",
     "DiscordNotifier",
-    "PushPlusNotifier"
+    "PushPlusNotifier",
+    "WeChatPushLiteNotifier",
+    "WeChatOfficialNotifier"
 ]
