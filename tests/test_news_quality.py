@@ -107,6 +107,13 @@ class NewsQualityTests(unittest.TestCase):
         self.assertEqual(config.min_verified_items, 8)
         self.assertEqual(config.max_articles_to_verify, 40)
 
+    def test_checked_in_config_allows_sparse_verified_daily_digest(self):
+        config = Config("config.yaml")
+
+        self.assertLessEqual(config.min_verified_items, 2)
+        self.assertNotIn("Select exactly 15-20", config.stage1_prompt_template)
+        self.assertIn("If fewer than 15 verified items are available", config.stage1_prompt_template)
+
     def test_article_verifier_marks_items_with_matching_source_domain_and_body(self):
         verifier_class = getattr(fetcher_module, "ArticleVerifier")
         verifier = verifier_class(

@@ -25,7 +25,7 @@ news:
   # Strict verification gate: fetch original article pages before selection and summary
   strict_verification: true
   verification_fail_policy: skip
-  min_verified_items: 8
+  min_verified_items: 2
   max_articles_to_verify: 40
 
   # Stage 1: Selection prompt template
@@ -67,7 +67,7 @@ news:
       Example format:
       ["INT-1", "INT-5", "DOM-2", "INT-12", ...]
 
-      CRITICAL: Select exactly 15-20 items. No more, no less.
+      CRITICAL: Select 15-20 items when at least 15 verified items are available. If fewer are available, select every worthwhile verified item.
 
   # Stage 2: Summarization prompt template (complete prompt for creating the digest)
   # Placeholders: {count}, {selected_news}
