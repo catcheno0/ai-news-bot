@@ -212,10 +212,11 @@ Return ONLY this JSON object:
         verification_fail_policy: str = "skip",
         min_verified_items: int = 0,
         max_articles_to_verify: Optional[int] = None,
+        news_max_age_hours: int = 48,
     ) -> str:
         """
         Fetch real-time news and generate a digest using two-stage prompt chaining:
-        Stage 1: Analyze and select 15-20 high-quality news items
+        Stage 1: Analyze and select 5-8 high-quality news items
         Stage 2: Create detailed summaries for selected items
 
         Args:
@@ -228,6 +229,7 @@ Return ONLY this JSON object:
             verification_fail_policy: "skip" removes unsupported selected items once; "fail" aborts
             min_verified_items: Minimum verified source items required before generation
             max_articles_to_verify: Maximum original article pages to fetch for verification
+            news_max_age_hours: Maximum RSS item age to keep before verification
 
         Returns:
             Generated news digest as string
@@ -241,6 +243,7 @@ Return ONLY this JSON object:
             fetch_kwargs = {
                 "language": language,
                 "max_items_per_source": max_items_per_source,
+                "max_age_hours": news_max_age_hours,
             }
             if strict_verification:
                 fetch_kwargs["strict_verification"] = True
@@ -267,7 +270,7 @@ Return ONLY this JSON object:
             logger.info(f"Starting two-stage prompt chaining with {total_items} news items")
 
             # ============================================================
-            # STAGE 1: Selection - Analyze and select 15-20 best items
+            # STAGE 1: Selection - Analyze and select 5-8 best items
             # ============================================================
             logger.info(f"Stage 1: Analyzing and selecting high-quality news items...")
 
@@ -290,29 +293,32 @@ Return ONLY this JSON object:
             )
 
             # Parse selected IDs
+            target_max_items = 8
             json_match = re.search(r'\[[\s\S]*?\]', selection_response)
             if not json_match:
                 logger.warning("Could not parse JSON from selection response, using fallback")
-                # Fallback: select first 18 items
-                selected_ids = list(news_items.keys())[:18]
+                selected_ids = list(news_items.keys())[:target_max_items]
             else:
                 try:
                     selected_ids = json.loads(json_match.group(0))
                     # Validate IDs
                     selected_ids = [id for id in selected_ids if id in news_items]
 
-                    # Ensure we have 15-20 items
-                    if len(selected_ids) < 15:
-                        logger.warning(f"Only {len(selected_ids)} items selected, adding more")
-                        remaining = [id for id in news_items.keys() if id not in selected_ids]
-                        selected_ids.extend(remaining[:18 - len(selected_ids)])
-                    elif len(selected_ids) > 20:
-                        logger.warning(f"{len(selected_ids)} items selected, trimming to 20")
-                        selected_ids = selected_ids[:20]
+                    if not selected_ids:
+                        logger.warning("No valid items selected, using fallback selection")
+                        selected_ids = list(news_items.keys())[:target_max_items]
+                    elif len(selected_ids) > target_max_items:
+                        logger.warning(f"{len(selected_ids)} items selected, trimming to {target_max_items}")
+                        selected_ids = selected_ids[:target_max_items]
 
                 except json.JSONDecodeError:
                     logger.warning("JSON parse error, using fallback selection")
-                    selected_ids = list(news_items.keys())[:18]
+                    selected_ids = list(news_items.keys())[:target_max_items]
+
+            if len(selected_ids) < min_verified_items:
+                raise Exception(
+                    f"Only {len(selected_ids)} news items selected; minimum is {min_verified_items}"
+                )
 
             logger.info(f"Stage 1 completed: Selected {len(selected_ids)} news items")
             logger.debug(f"Selected IDs: {selected_ids}")

@@ -19,14 +19,15 @@ news:
   # Default: false (recommended to keep disabled)
   enable_web_search: false
 
-  # Maximum news items to fetch per source (fetch more for AI to select from)
-  max_items_per_source: 10
+  # Maximum news items to fetch per source (fetch more verified candidates for AI to select from)
+  max_items_per_source: 15
+  max_age_hours: 96
 
   # Strict verification gate: fetch original article pages before selection and summary
   strict_verification: true
   verification_fail_policy: skip
   min_verified_items: 2
-  max_articles_to_verify: 40
+  max_articles_to_verify: 80
 
   # Stage 1: Selection prompt template
   # Placeholders: {total_items}, {formatted_news}
@@ -35,7 +36,7 @@ news:
 
       ## YOUR TASK - STAGE 1: NEWS SELECTION
 
-      You are a senior AI industry analyst. Analyze the {total_items} verified news items above and select 15-20 of the highest-quality items. If fewer than 15 verified items are available, select all worthwhile verified items.
+      You are a senior AI industry analyst. Analyze the {total_items} verified news items above and select 5-8 of the highest-quality items. If fewer than 5 verified items are available, select all worthwhile verified items.
 
       ### SELECTION CRITERIA:
       - ✅ Groundbreaking research or technical breakthroughs
@@ -67,7 +68,7 @@ news:
       Example format:
       ["INT-1", "INT-5", "DOM-2", "INT-12", ...]
 
-      CRITICAL: Select 15-20 items when at least 15 verified items are available. If fewer are available, select every worthwhile verified item.
+      CRITICAL: Select 5-8 items when at least 5 verified items are available. If fewer are available, select every worthwhile verified item.
 
   # Stage 2: Summarization prompt template (complete prompt for creating the digest)
   # Placeholders: {count}, {selected_news}

@@ -98,7 +98,8 @@ def main():
                     strict_verification=config.strict_verification,
                     verification_fail_policy=config.verification_fail_policy,
                     min_verified_items=config.min_verified_items,
-                    max_articles_to_verify=config.max_articles_to_verify
+                    max_articles_to_verify=config.max_articles_to_verify,
+                    news_max_age_hours=config.news_max_age_hours
                 )
 
                 logger.info(f"News digest generated for {language.upper()} ({len(news_digest)} characters)")

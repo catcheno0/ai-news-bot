@@ -112,7 +112,7 @@ class Config:
 
 ## YOUR TASK - STAGE 1: NEWS SELECTION
 
-You are a senior AI industry analyst. Analyze the {total_items} verified news items above and select 15-20 of the highest-quality items. If fewer than 15 verified items are available, select all worthwhile verified items.
+You are a senior AI industry analyst. Analyze the {total_items} verified news items above and select 5-8 of the highest-quality items. If fewer than 5 verified items are available, select all worthwhile verified items.
 
 ### SELECTION CRITERIA:
 - ✅ Groundbreaking research or technical breakthroughs
@@ -131,7 +131,7 @@ Return ONLY a JSON array of selected news IDs. No explanations, no markdown, jus
 Example format:
 ["INT-1", "INT-5", "DOM-2", "INT-12", ...]
 
-CRITICAL: Select exactly 15-20 items. No more, no less."""
+CRITICAL: Select 5-8 items when at least 5 verified items are available. If fewer are available, select every worthwhile verified item."""
 
         return self.config_data.get("news", {}).get("stage1_prompt_template", default_template)
 
@@ -238,6 +238,14 @@ For each news item:
     def max_items_per_source(self) -> int:
         """Maximum news items to fetch per source"""
         return self.config_data.get("news", {}).get("max_items_per_source", 5)
+
+    @property
+    def news_max_age_hours(self) -> int:
+        """Maximum age of RSS items to consider for a daily digest."""
+        env_value = os.getenv("NEWS_MAX_AGE_HOURS", "").strip()
+        if env_value:
+            return int(env_value)
+        return int(self.config_data.get("news", {}).get("max_age_hours", 48))
 
 
     @property

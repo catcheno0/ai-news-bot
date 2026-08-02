@@ -520,6 +520,7 @@ class NewsFetcher:
         self,
         language: str = "en",
         max_items_per_source: int = 5,
+        max_age_hours: int = 48,
         strict_verification: bool = False,
         max_articles_to_verify: Optional[int] = None,
     ) -> Dict[str, List[Dict[str, str]]]:
@@ -529,6 +530,7 @@ class NewsFetcher:
         Args:
             language: Language code for the response
             max_items_per_source: Maximum items to fetch per source
+            max_age_hours: Maximum item age to keep before verification
             strict_verification: Whether to require source-domain and article-body verification
             max_articles_to_verify: Maximum original article pages to fetch for verification
 
@@ -570,7 +572,7 @@ class NewsFetcher:
         if not feeds:
             logger.warning(f"No domestic feeds configured for language: {language}, using international only")
             all_news['international'] = self._deduplicate_items(
-                self._filter_by_time(all_news['international'])
+                self._filter_by_time(all_news['international'], max_age_hours)
             )
             if strict_verification:
                 all_news = self._verify_news_items(all_news, max_articles_to_verify)
@@ -584,10 +586,10 @@ class NewsFetcher:
                 all_news['domestic'].append(item)
 
         all_news['international'] = self._deduplicate_items(
-            self._filter_by_time(all_news['international'])
+            self._filter_by_time(all_news['international'], max_age_hours)
         )
         all_news['domestic'] = self._deduplicate_items(
-            self._filter_by_time(all_news['domestic'])
+            self._filter_by_time(all_news['domestic'], max_age_hours)
         )
 
         if strict_verification:

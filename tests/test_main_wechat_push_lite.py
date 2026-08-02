@@ -22,6 +22,7 @@ class MainWeChatPushLiteTests(unittest.TestCase):
         config.verification_fail_policy = "skip"
         config.min_verified_items = 1
         config.max_articles_to_verify = 5
+        config.news_max_age_hours = 96
         config.pages_enabled = False
         config.pages_output_dir = "public"
         config.pages_site_url = ""
