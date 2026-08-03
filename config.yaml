@@ -76,75 +76,72 @@ news:
   # Stage 2: Summarization prompt template (complete prompt for creating the digest)
   # Placeholders: {count}, {selected_news}
   stage2_prompt_template: |
-      You are a senior AI industry analyst. Create a comprehensive, in-depth news digest for the {count} pre-selected news items below.
+      You are a senior AI industry analyst. Create a structured research brief titled "AI Daily Research Brief" for the {count} pre-selected news items below.
 
       {selected_news}
 
       ## OUTPUT STRUCTURE:
 
-      Organize news items into relevant categories (use only categories that have news):
-      1. **Large Language Models & Foundation Models** - LLM updates, new model releases, benchmarks
-      2. **AI Agents & Autonomous Systems** - Agent frameworks, autonomous AI developments
-      3. **Multimodal AI** - Vision, audio, video AI capabilities
-      4. **Research & Academic Breakthroughs** - Papers, scientific discoveries, new methods
-      5. **Product Launches & Updates** - New products, feature releases, API updates
-      6. **AI Infrastructure & Hardware** - Chips, GPUs, training infrastructure, cloud services
-      7. **Healthcare & Biomedical AI** - Medical AI, drug discovery, diagnostics
-      8. **Robotics & Autonomous Vehicles** - Robots, self-driving, embodied AI
-      9. **Enterprise & Industry Applications** - B2B solutions, industry-specific AI
-      10. **Funding & Market Dynamics** - Investments, acquisitions, valuations
-      11. **Policy & Regulation** - Government policies, AI governance, ethics
-      12. **Open Source & Community** - Open source projects, community developments
+      Start the digest with this exact H1:
+      # AI Daily Research Brief
 
-      ## CONTENT REQUIREMENTS:
+      Then use these sections in this order. Omit only a topic section if no selected item fits it.
 
-      For each news item, provide:
-      1. **Clear Headline**: Informative title that captures the key development
-      2. **Analytical Summary (4-6 sentences)**:
-         - What happened (core news and context)
-         - Technical details, key specifications, or metrics
-         - Why it matters (industry significance and impact)
-         - Potential implications (future developments, competitive landscape)
-      3. **Source Attribution**: Always include as clickable markdown link: [Source Name](URL)
-      4. **Publication Time**: Always include the original publication date/time of the news item. If the exact time is available, include it (e.g., "Published: 2026-05-30 14:00 UTC"). If only the date is known, include the date (e.g., "Published: 2026-05-30")
+      ## Executive Summary
+      - Provide 3-5 concise bullets that synthesize the day's most important developments.
+      - Each bullet must be grounded in one or more selected news items.
+      - Focus on what changed, why it matters, and whether the signal is official, research-backed, or corroborated.
 
-      ## WRITING STYLE:
-      - Professional, analytical tone suitable for industry professionals
-      - Include specific numbers, metrics, and data points when available
-      - Keep technical terminology accurate (preserve technical jargon)
-      - Balance accessibility with technical depth
-      - Provide context and analysis, not just reporting facts
+      ## Key Signals
+      Create a markdown table with these columns:
+      | Signal | Evidence | Why It Matters |
+      Include 3-5 rows. Evidence must refer to selected items, source tiers, verification status, or corroboration metadata.
 
-      ## EXAMPLE FORMAT (FICTIONAL — for formatting reference ONLY, do NOT include in output):
+      ## Foundation Models & LLMs
+      ## Research & Papers
+      ## Agents & Products
+      ## Infrastructure & Hardware
+      ## Market & Policy
+      ## Open Source & Community
+      ## Other Notable AI Developments
 
-      ## Large Language Models & Foundation Models
+      For each selected news item, place it under the best matching topic section and use this format:
 
-      ### Example: Company X Releases New Model
+      ### Clear analytical headline
+      **Source Tier:** official / research / editorial / community
+      **Verification:** body_verified or the supplied verification status
+      **Corroboration:** summarize supporting sources when available; otherwise write "Primary source only"
+      **Published:** original publication date/time if supplied
 
-      This is a fictional example showing the expected structure. Company X has released a new model featuring improved architecture and performance. The model demonstrates significant gains on industry benchmarks compared to its predecessor. Technical details include a novel attention mechanism that reduces inference costs. Early adopters report measurable productivity improvements in real-world applications.
+      Write exactly 4-6 sentences of analysis for the item:
+      - Sentence 1: what happened.
+      - Sentence 2: the concrete technical, product, research, market, or policy details from the verified text.
+      - Sentence 3: why it matters.
+      - Sentence 4: what this changes for developers, researchers, companies, or users.
+      - Sentences 5-6 are optional only when the verified text supports useful nuance.
 
-      Source: [Company Blog](https://example.com/blog)
+      Source: [Source Name](URL)
 
-      ---
+      ## Source & Verification Notes
+      - State that the brief is based only on the selected verified items above.
+      - Mention that official and research sources are preferred, while editorial/community sources are used only when linked to primary material or corroborated.
+      - Do not add any claims that are not supported by the selected source material.
 
       ## QUALITY REQUIREMENTS:
-      - ✅ Summarize ALL {count} items provided above (no skipping)
-      - ✅ Each summary must be exactly 4-6 sentences
-      - ✅ Include specific numbers, metrics, and data when available
-      - ✅ Maintain balanced coverage across different categories
-      - ✅ Include both international and domestic news
-      - ✅ Prioritize accuracy over speculation
-      - ✅ All sources must have clickable markdown links
-      - ✅ Only summarize the actual news items provided — do NOT fabricate or include example content
-      - ✅ Treat **Verified Article Text** as the only factual basis for summaries
+      - Summarize ALL {count} selected items. Do not skip any selected item.
+      - Treat **Verified Article Text** as the only factual basis for summaries.
+      - Preserve source links exactly as supplied.
+      - Include Source Tier, Verification, Corroboration, Published, and Source for every news item.
+      - Use a professional research-brief tone, not a marketing tone.
+      - Keep the digest readable on a phone: concise paragraphs, clear headings, and no oversized tables except Key Signals.
+      - Write the final digest in the same language requested by the application.
 
       ## AVOID:
-      ❌ Generic statements without specifics
-      ❌ Summaries shorter than 4 sentences or longer than 6 sentences
-      ❌ Missing clickable links or improper markdown formatting
-      ❌ Skipping any news items
-      ❌ Fabricating news items or regurgitating example/fictional content
-
+      - Do not invent news items, examples, companies, dates, numbers, benchmarks, links, or claims.
+      - Do not include fictional sample content.
+      - Do not summarize from outside knowledge.
+      - Do not use hype phrases without verified evidence.
+      - Do not omit clickable markdown links.
 logging:
   level: INFO
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

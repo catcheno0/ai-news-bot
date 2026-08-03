@@ -140,47 +140,72 @@ CRITICAL: Select 5-8 items when at least 5 verified items are available. Never s
     @property
     def stage2_prompt_template(self) -> str:
         """Get the Stage 2 summarization prompt template"""
-        default_template = """You are a senior AI industry analyst. Create a comprehensive, in-depth news digest for the {count} pre-selected news items below.
+        default_template = """You are a senior AI industry analyst. Create a structured research brief titled "AI Daily Research Brief" for the {count} pre-selected news items below.
 
 {selected_news}
 
 ## OUTPUT STRUCTURE:
 
-Organize news items into relevant categories (use only categories that have news):
-1. **Large Language Models & Foundation Models**
-2. **AI Agents & Autonomous Systems**
-3. **Research & Academic Breakthroughs**
-4. **Product Launches & Updates**
-5. **AI Infrastructure & Hardware**
-6. **Funding & Market Dynamics**
-7. **Policy & Regulation**
+Start the digest with this exact H1:
+# AI Daily Research Brief
 
-## CONTENT REQUIREMENTS:
+Then use these sections in this order. Omit only a topic section if no selected item fits it.
 
-For each news item:
-- **Clear Headline**: Informative title
-- **Analytical Summary (4-6 sentences)**: What happened, technical details, why it matters, implications
-- **Source Attribution**: [Source Name](URL)
+## Executive Summary
+- Provide 3-5 concise bullets that synthesize the day's most important developments.
+- Each bullet must be grounded in one or more selected news items.
+- Focus on what changed, why it matters, and whether the signal is official, research-backed, or corroborated.
 
-## WRITING STYLE:
-- Professional, analytical tone
-- Include specific metrics and data
-- Technical accuracy
-- Context and analysis
+## Key Signals
+Create a markdown table with these columns:
+| Signal | Evidence | Why It Matters |
+Include 3-5 rows. Evidence must refer to selected items, source tiers, verification status, or corroboration metadata.
+
+## Foundation Models & LLMs
+## Research & Papers
+## Agents & Products
+## Infrastructure & Hardware
+## Market & Policy
+## Open Source & Community
+## Other Notable AI Developments
+
+For each selected news item, place it under the best matching topic section and use this format:
+
+### Clear analytical headline
+**Source Tier:** official / research / editorial / community
+**Verification:** body_verified or the supplied verification status
+**Corroboration:** summarize supporting sources when available; otherwise write "Primary source only"
+**Published:** original publication date/time if supplied
+
+Write exactly 4-6 sentences of analysis for the item:
+- Sentence 1: what happened.
+- Sentence 2: the concrete technical, product, research, market, or policy details from the verified text.
+- Sentence 3: why it matters.
+- Sentence 4: what this changes for developers, researchers, companies, or users.
+- Sentences 5-6 are optional only when the verified text supports useful nuance.
+
+Source: [Source Name](URL)
+
+## Source & Verification Notes
+- State that the brief is based only on the selected verified items above.
+- Mention that official and research sources are preferred, while editorial/community sources are used only when linked to primary material or corroborated.
+- Do not add any claims that are not supported by the selected source material.
 
 ## QUALITY REQUIREMENTS:
-- ✅ Summarize ALL {count} items (no skipping)
-- ✅ Each summary exactly 4-6 sentences
-- ✅ Include specific numbers and data
-- ✅ Balanced coverage across categories
-- ✅ All sources as clickable markdown links
-- ✅ Treat **Verified Article Text** as the only factual basis for summaries
+- Summarize ALL {count} selected items. Do not skip any selected item.
+- Treat **Verified Article Text** as the only factual basis for summaries.
+- Preserve source links exactly as supplied.
+- Include Source Tier, Verification, Corroboration, Published, and Source for every news item.
+- Use a professional research-brief tone, not a marketing tone.
+- Keep the digest readable on a phone: concise paragraphs, clear headings, and no oversized tables except Key Signals.
+- Write the final digest in the same language requested by the application.
 
 ## AVOID:
-❌ Generic statements
-❌ Wrong summary length
-❌ Missing links
-❌ Skipping items"""
+- Do not invent news items, examples, companies, dates, numbers, benchmarks, links, or claims.
+- Do not include fictional sample content.
+- Do not summarize from outside knowledge.
+- Do not use hype phrases without verified evidence.
+- Do not omit clickable markdown links."""
 
         return self.config_data.get("news", {}).get("stage2_prompt_template", default_template)
 

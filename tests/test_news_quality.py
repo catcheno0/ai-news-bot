@@ -527,6 +527,28 @@ class NewsQualityTests(unittest.TestCase):
         self.assertIn("**Source Tier:** official", formatted)
         self.assertIn("**Link:** https://openai.com/news/example", formatted)
 
+    def test_checked_in_config_uses_research_report_stage2_template(self):
+        config = Config("config.yaml")
+        template = config.stage2_prompt_template
+
+        self.assertIn("AI Daily Research Brief", template)
+        self.assertIn("Executive Summary", template)
+        self.assertIn("Key Signals", template)
+        self.assertIn("Source Tier", template)
+        self.assertIn("Verification", template)
+        self.assertIn("Do not invent", template)
+
+    def test_default_stage2_prompt_uses_research_report_structure(self):
+        config = Config.__new__(Config)
+        config.config_data = {}
+        template = config.stage2_prompt_template
+
+        self.assertIn("AI Daily Research Brief", template)
+        self.assertIn("Executive Summary", template)
+        self.assertIn("Key Signals", template)
+        self.assertIn("Source Tier", template)
+        self.assertIn("Source & Verification Notes", template)
+
 
 if __name__ == "__main__":
     unittest.main()

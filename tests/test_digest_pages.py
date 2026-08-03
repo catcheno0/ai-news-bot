@@ -32,7 +32,7 @@ class DigestPagePublisherTests(unittest.TestCase):
             self.assertEqual(published.dated_url, "https://news.my-ai-news.top/2026-08-02.html")
 
             latest_html = latest_path.read_text(encoding="utf-8")
-            self.assertIn("<h1>AI Daily</h1>", latest_html)
+            self.assertIn('<h1 id="ai-daily">AI Daily</h1>', latest_html)
             self.assertIn('<a href="https://openai.com/news">OpenAI</a>', latest_html)
 
     def test_publish_escapes_raw_html_before_rendering_markdown(self):
@@ -51,3 +51,43 @@ class DigestPagePublisherTests(unittest.TestCase):
             self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", html)
             self.assertIn('href="https://example.com?a=1&amp;b=2"', html)
 
+
+    def test_publish_renders_research_report_layout_with_navigation(self):
+        generated_at = datetime(2026, 8, 3, 9, 15, tzinfo=timezone.utc)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            publisher = DigestPagePublisher(output_dir=tmp_dir, site_url="")
+
+            publisher.publish(
+                """# AI Daily Research Brief
+
+## Executive Summary
+
+- Foundation model updates remain the strongest signal.
+
+## Key Signals
+
+| Signal | Evidence |
+| --- | --- |
+| Research acceleration | Official and research sources |
+
+## Research & Papers
+
+### MIT releases an AI systems study
+
+Source: [MIT News](https://news.mit.edu)
+""",
+                language="zh",
+                generated_at=generated_at,
+                primary=True,
+            )
+
+            html = (Path(tmp_dir) / "latest.html").read_text(encoding="utf-8")
+            self.assertIn('class="report-shell"', html)
+            self.assertIn("AI Daily Research Brief", html)
+            self.assertIn("Research report generated from verified AI news sources", html)
+            self.assertIn('class="report-nav"', html)
+            self.assertIn('href="#executive-summary"', html)
+            self.assertIn('href="#key-signals"', html)
+            self.assertIn('class="report-document"', html)
+            self.assertIn('class="verification-note"', html)
