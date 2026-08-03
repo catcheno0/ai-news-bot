@@ -74,6 +74,15 @@ class NewsGenerator:
                 formatted += f"### [{news_id}] {item['title']}\n"
                 formatted += f"**Source:** {item['source']}\n"
                 formatted += f"**Source Tier:** {item.get('source_tier', 'unknown')}\n"
+                if item.get('selection_role'):
+                    formatted += f"**Selection Role:** {item['selection_role']}\n"
+                if item.get('corroboration_score') is not None:
+                    supporters = ", ".join(item.get('supporting_sources', [])) or "none"
+                    supporter_tiers = ", ".join(item.get('supporting_source_tiers', [])) or "none"
+                    formatted += (
+                        f"**Corroboration:** score={item.get('corroboration_score', 0)}; "
+                        f"supporting_sources={supporters}; supporting_tiers={supporter_tiers}\n"
+                    )
                 if item.get('verification_status'):
                     formatted += f"**Verification:** {item['verification_status']}\n"
                 if item.get('verified_text'):
@@ -96,6 +105,15 @@ class NewsGenerator:
                 formatted += f"### [{news_id}] {item['title']}\n"
                 formatted += f"**Source:** {item['source']}\n"
                 formatted += f"**Source Tier:** {item.get('source_tier', 'unknown')}\n"
+                if item.get('selection_role'):
+                    formatted += f"**Selection Role:** {item['selection_role']}\n"
+                if item.get('corroboration_score') is not None:
+                    supporters = ", ".join(item.get('supporting_sources', [])) or "none"
+                    supporter_tiers = ", ".join(item.get('supporting_source_tiers', [])) or "none"
+                    formatted += (
+                        f"**Corroboration:** score={item.get('corroboration_score', 0)}; "
+                        f"supporting_sources={supporters}; supporting_tiers={supporter_tiers}\n"
+                    )
                 if item.get('verification_status'):
                     formatted += f"**Verification:** {item['verification_status']}\n"
                 if item.get('verified_text'):
@@ -118,6 +136,15 @@ class NewsGenerator:
             formatted_selected += f"### [{news_id}] {item['title']}\n"
             formatted_selected += f"**Source:** {item['source']}\n"
             formatted_selected += f"**Source Tier:** {item.get('source_tier', 'unknown')}\n"
+            if item.get('selection_role'):
+                formatted_selected += f"**Selection Role:** {item['selection_role']}\n"
+            if item.get('corroboration_score') is not None:
+                supporters = ", ".join(item.get('supporting_sources', [])) or "none"
+                supporter_tiers = ", ".join(item.get('supporting_source_tiers', [])) or "none"
+                formatted_selected += (
+                    f"**Corroboration:** score={item.get('corroboration_score', 0)}; "
+                    f"supporting_sources={supporters}; supporting_tiers={supporter_tiers}\n"
+                )
             if item.get('verification_status'):
                 formatted_selected += f"**Verification:** {item['verification_status']}\n"
             content = item.get('verified_text') or item.get('description', '')
@@ -129,6 +156,38 @@ class NewsGenerator:
                 formatted_selected += f"**Published:** {item['published']}\n"
             formatted_selected += "\n"
         return formatted_selected
+
+    def _is_selection_allowed(self, item: Dict) -> bool:
+        role = item.get("selection_role")
+        if role:
+            return role in {"primary", "primary_link", "corroborated_primary"}
+        return item.get("source_tier") in {"official", "research"}
+
+    def _allowed_news_ids(self, news_items: Dict[str, Dict], target_max_items: int) -> List[str]:
+        return [
+            news_id for news_id, item in news_items.items()
+            if self._is_selection_allowed(item)
+        ][:target_max_items]
+
+    def _filter_selection_to_allowed_items(
+        self,
+        selected_ids: List[str],
+        news_items: Dict[str, Dict],
+        target_max_items: int,
+    ) -> List[str]:
+        allowed_ids = set(self._allowed_news_ids(news_items, len(news_items)))
+        filtered_ids = [news_id for news_id in selected_ids if news_id in allowed_ids]
+
+        if len(filtered_ids) < len(selected_ids):
+            removed = [news_id for news_id in selected_ids if news_id not in allowed_ids]
+            logger.warning(f"Selection removed context-only items: {removed}")
+
+        if not filtered_ids:
+            logger.warning("No selected items passed selection-role rules, using primary fallback")
+            filtered_ids = self._allowed_news_ids(news_items, target_max_items)
+
+        return filtered_ids[:target_max_items]
+
 
     def _build_summarization_prompt(
         self,
@@ -314,6 +373,12 @@ Return ONLY this JSON object:
                 except json.JSONDecodeError:
                     logger.warning("JSON parse error, using fallback selection")
                     selected_ids = list(news_items.keys())[:target_max_items]
+
+            selected_ids = self._filter_selection_to_allowed_items(
+                selected_ids,
+                news_items,
+                target_max_items,
+            )
 
             if len(selected_ids) < min_verified_items:
                 raise Exception(

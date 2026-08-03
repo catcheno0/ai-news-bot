@@ -133,7 +133,7 @@ class NewsFetcher:
 
     def __init__(self):
         """Initialize the news fetcher"""
-        # RSS feed sources for AI news (official and research sources only)
+        # RSS feed sources for AI news, grouped by trust tier.
         self.rss_feeds = {
             "OpenAI News": "https://openai.com/news/rss.xml",
             "Google AI Blog": "https://blog.google/technology/ai/rss/",
@@ -143,10 +143,18 @@ class NewsFetcher:
             "NVIDIA Deep Learning Blog": "https://blogs.nvidia.com/blog/category/deep-learning/feed/",
             "AWS Machine Learning Blog": "https://aws.amazon.com/blogs/machine-learning/feed/",
             "GitHub Blog AI": "https://github.blog/tag/ai/feed/",
+            "PyTorch Blog": "https://pytorch.org/blog/feed.xml",
+            "TensorFlow Blog": "https://blog.tensorflow.org/feeds/posts/default?alt=rss",
             "arXiv AI": "https://rss.arxiv.org/rss/cs.AI",
             "arXiv Machine Learning": "https://rss.arxiv.org/rss/cs.LG",
             "arXiv Computer Vision": "https://rss.arxiv.org/rss/cs.CV",
             "arXiv NLP": "https://rss.arxiv.org/rss/cs.CL",
+            "BAIR Blog": "https://bair.berkeley.edu/blog/feed.xml",
+            "MIT AI News": "https://news.mit.edu/rss/topic/artificial-intelligence2",
+            "TechCrunch AI": "https://techcrunch.com/category/artificial-intelligence/feed/",
+            "VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
+            "MIT Technology Review AI": "https://www.technologyreview.com/topic/artificial-intelligence/feed/",
+            "Hacker News AI": "https://hnrss.org/newest?q=AI+OR+LLM+OR+OpenAI+OR+Anthropic+OR+DeepMind+OR+Mistral+OR+Cohere&points=50&count=20",
         }
 
         self.source_tiers = {
@@ -158,12 +166,44 @@ class NewsFetcher:
             "NVIDIA Deep Learning Blog": "official",
             "AWS Machine Learning Blog": "official",
             "GitHub Blog AI": "official",
+            "PyTorch Blog": "official",
+            "TensorFlow Blog": "official",
             "arXiv AI": "research",
             "arXiv Machine Learning": "research",
             "arXiv Computer Vision": "research",
             "arXiv NLP": "research",
+            "BAIR Blog": "research",
+            "MIT AI News": "research",
+            "TechCrunch AI": "editorial",
+            "VentureBeat AI": "editorial",
+            "MIT Technology Review AI": "editorial",
+            "Hacker News AI": "community",
         }
 
+        self.primary_source_domains = [
+            "openai.com",
+            "blog.google",
+            "deepmind.google",
+            "research.google",
+            "huggingface.co",
+            "blogs.nvidia.com",
+            "nvidia.com",
+            "aws.amazon.com",
+            "github.blog",
+            "github.com",
+            "arxiv.org",
+            "pytorch.org",
+            "blog.tensorflow.org",
+            "tensorflow.org",
+            "bair.berkeley.edu",
+            "news.mit.edu",
+            "mit.edu",
+            "anthropic.com",
+            "mistral.ai",
+            "cohere.com",
+            "ai.meta.com",
+            "microsoft.com",
+        ]
 
         self.source_domains = {
             "OpenAI News": ["openai.com"],
@@ -174,10 +214,18 @@ class NewsFetcher:
             "NVIDIA Deep Learning Blog": ["blogs.nvidia.com", "nvidia.com"],
             "AWS Machine Learning Blog": ["aws.amazon.com"],
             "GitHub Blog AI": ["github.blog"],
+            "PyTorch Blog": ["pytorch.org"],
+            "TensorFlow Blog": ["blog.tensorflow.org", "tensorflow.org"],
             "arXiv AI": ["arxiv.org"],
             "arXiv Machine Learning": ["arxiv.org"],
             "arXiv Computer Vision": ["arxiv.org"],
             "arXiv NLP": ["arxiv.org"],
+            "BAIR Blog": ["bair.berkeley.edu"],
+            "MIT AI News": ["news.mit.edu", "mit.edu"],
+            "TechCrunch AI": ["techcrunch.com"],
+            "VentureBeat AI": ["venturebeat.com"],
+            "MIT Technology Review AI": ["technologyreview.com"],
+            "Hacker News AI": self.primary_source_domains,
         }
         self.article_verifier = ArticleVerifier(self.source_domains)
 
@@ -454,7 +502,7 @@ class NewsFetcher:
     def _deduplicate_items(self, items: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """Keep one item per normalized title, preferring higher-trust sources."""
         unique_items = {}
-        tier_rank = {"official": 2, "research": 1}
+        tier_rank = {"official": 4, "research": 3, "editorial": 2, "community": 1}
 
         for item in items:
             title = unescape(item.get("title", "")).casefold()
@@ -473,6 +521,84 @@ class NewsFetcher:
                 unique_items[key] = item
 
         return list(unique_items.values())
+
+
+
+    def _host_matches_domains(self, link: str, domains: List[str]) -> bool:
+        host = (urlparse(link).hostname or "").lower()
+        if not host:
+            return False
+        return any(host == domain or host.endswith(f".{domain}") for domain in domains)
+
+    def _has_primary_source_link(self, item: Dict[str, str]) -> bool:
+        return self._host_matches_domains(item.get("link", ""), self.primary_source_domains)
+
+    def _topic_tokens(self, item: Dict[str, str]) -> set:
+        text = f"{item.get('title', '')} {item.get('description', '')}"
+        stop_words = {
+            "the", "and", "for", "with", "from", "that", "this", "about", "into", "after",
+            "over", "under", "more", "less", "news", "blog", "says", "said", "report",
+            "reports", "launch", "launches", "release", "releases", "update", "updates",
+            "model", "models", "system", "systems", "using", "use", "used", "new", "latest",
+            "artificial", "intelligence", "machine", "learning", "deep",
+        }
+        return {
+            token for token in re.findall(r"[a-z0-9\u4e00-\u9fff]+", unescape(text).casefold())
+            if len(token) >= 3 and token not in stop_words
+        }
+
+    def _items_are_related(self, first: Dict[str, str], second: Dict[str, str]) -> bool:
+        first_link = first.get("link", "").strip()
+        second_link = second.get("link", "").strip()
+        if first_link and second_link and first_link == second_link:
+            return True
+
+        first_tokens = self._topic_tokens(first)
+        second_tokens = self._topic_tokens(second)
+        if not first_tokens or not second_tokens:
+            return False
+
+        overlap = first_tokens & second_tokens
+        return len(overlap) >= 2
+
+    def _annotate_corroboration(
+        self,
+        news_data: Dict[str, List[Dict[str, str]]]
+    ) -> Dict[str, List[Dict[str, str]]]:
+        items = [item for section in ("international", "domestic") for item in news_data.get(section, [])]
+
+        for item in items:
+            supporters = []
+            supporter_tiers = []
+            for other in items:
+                if other is item:
+                    continue
+                if other.get("source") == item.get("source"):
+                    continue
+                if not self._items_are_related(item, other):
+                    continue
+                source = other.get("source", "")
+                tier = other.get("source_tier", "")
+                if source and source not in supporters:
+                    supporters.append(source)
+                if tier and tier not in supporter_tiers:
+                    supporter_tiers.append(tier)
+
+            item["supporting_sources"] = supporters
+            item["supporting_source_tiers"] = supporter_tiers
+            item["corroboration_score"] = len(supporters)
+
+            tier = item.get("source_tier", "")
+            if tier in {"official", "research"}:
+                item["selection_role"] = "primary"
+            elif self._has_primary_source_link(item):
+                item["selection_role"] = "primary_link"
+            elif any(tier in {"official", "research"} for tier in supporter_tiers):
+                item["selection_role"] = "corroborated_primary"
+            else:
+                item["selection_role"] = "context_only"
+
+        return news_data
 
 
 
@@ -576,6 +702,7 @@ class NewsFetcher:
             )
             if strict_verification:
                 all_news = self._verify_news_items(all_news, max_articles_to_verify)
+            all_news = self._annotate_corroboration(all_news)
             return all_news
 
         for source_name, feed_url in feeds.items():
@@ -594,6 +721,8 @@ class NewsFetcher:
 
         if strict_verification:
             all_news = self._verify_news_items(all_news, max_articles_to_verify)
+
+        all_news = self._annotate_corroboration(all_news)
 
         logger.info(
             f"Fetched {len(all_news['international'])} international news items "

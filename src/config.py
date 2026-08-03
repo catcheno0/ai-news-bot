@@ -121,7 +121,9 @@ You are a senior AI industry analyst. Analyze the {total_items} verified news it
 - ✅ Large funding rounds or M&A activities
 - ✅ Balanced coverage across categories (LLM, Agents, Research, Products, etc.)
 - ✅ Include both international and domestic news when available
-- ✅ Only select items with an "official" or "research" source tier
+- Prefer items with an "official" or "research" source tier
+- Use editorial/community items only when **Selection Role:** is primary_link or corroborated_primary
+- Never select **Selection Role:** context_only items; they are clues for comparison only
 - ✅ Use the supplied original link as the sole source of factual claims
 - ✅ Only select items marked **Verification:** body_verified when present
 
@@ -131,7 +133,7 @@ Return ONLY a JSON array of selected news IDs. No explanations, no markdown, jus
 Example format:
 ["INT-1", "INT-5", "DOM-2", "INT-12", ...]
 
-CRITICAL: Select 5-8 items when at least 5 verified items are available. If fewer are available, select every worthwhile verified item."""
+CRITICAL: Select 5-8 items when at least 5 verified items are available. Never select **Selection Role:** context_only items. If fewer are available, select every worthwhile verified item that passes the selection role rule."""
 
         return self.config_data.get("news", {}).get("stage1_prompt_template", default_template)
 
