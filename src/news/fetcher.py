@@ -155,6 +155,14 @@ class NewsFetcher:
             "VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
             "MIT Technology Review AI": "https://www.technologyreview.com/topic/artificial-intelligence/feed/",
             "Hacker News AI": "https://hnrss.org/newest?q=AI+OR+LLM+OR+OpenAI+OR+Anthropic+OR+DeepMind+OR+Mistral+OR+Cohere&points=50&count=20",
+            "Qwen Blog": "https://qwenlm.github.io/blog/index.xml",
+            "DeepSeek Releases": "https://github.com/deepseek-ai/DeepSeek-R1/releases.atom",
+            "Tencent Hunyuan Releases": "https://github.com/Tencent-Hunyuan/HunyuanVideo/releases.atom",
+            "PaddlePaddle Releases": "https://github.com/PaddlePaddle/Paddle/releases.atom",
+            "MindSpore Releases": "https://github.com/mindspore-ai/mindspore/releases.atom",
+            "InternLM Releases": "https://github.com/InternLM/InternLM/releases.atom",
+            "MiniCPM Releases": "https://github.com/OpenBMB/MiniCPM/releases.atom",
+            "arXiv China AI Models": "https://export.arxiv.org/api/query?search_query=all:Qwen+OR+all:DeepSeek+OR+all:InternLM+OR+all:MiniCPM+OR+all:ChatGLM+OR+all:Hunyuan&sortBy=submittedDate&sortOrder=descending&max_results=20",
         }
 
         self.source_tiers = {
@@ -178,6 +186,16 @@ class NewsFetcher:
             "VentureBeat AI": "editorial",
             "MIT Technology Review AI": "editorial",
             "Hacker News AI": "community",
+            "Qwen Blog": "official",
+            "DeepSeek Releases": "official",
+            "Tencent Hunyuan Releases": "official",
+            "PaddlePaddle Releases": "official",
+            "MindSpore Releases": "official",
+            "InternLM Releases": "official",
+            "MiniCPM Releases": "official",
+            "arXiv China AI Models": "research",
+            "Tencent WorkBuddy Changelog": "official",
+            "QbitAI": "editorial",
         }
 
         self.primary_source_domains = [
@@ -203,6 +221,20 @@ class NewsFetcher:
             "cohere.com",
             "ai.meta.com",
             "microsoft.com",
+            "qwen.ai",
+            "qwenlm.github.io",
+            "deepseek.com",
+            "deepseek.ai",
+            "workbuddy.cn",
+            "cloud.tencent.com",
+            "cloud.tencent.com.cn",
+            "tencent.com",
+            "paddlepaddle.org.cn",
+            "mindspore.cn",
+            "modelscope.cn",
+            "internlm.org.cn",
+            "zhipuai.cn",
+            "openbmb.cn",
         ]
 
         self.source_domains = {
@@ -226,7 +258,25 @@ class NewsFetcher:
             "VentureBeat AI": ["venturebeat.com"],
             "MIT Technology Review AI": ["technologyreview.com"],
             "Hacker News AI": self.primary_source_domains,
+            "Qwen Blog": ["qwenlm.github.io", "qwen.ai"],
+            "DeepSeek Releases": ["github.com", "deepseek.com", "deepseek.ai"],
+            "Tencent Hunyuan Releases": ["github.com", "tencent.com"],
+            "PaddlePaddle Releases": ["github.com", "paddlepaddle.org.cn"],
+            "MindSpore Releases": ["github.com", "mindspore.cn"],
+            "InternLM Releases": ["github.com", "internlm.org.cn", "modelscope.cn"],
+            "MiniCPM Releases": ["github.com", "openbmb.cn", "modelscope.cn"],
+            "arXiv China AI Models": ["arxiv.org"],
+            "Tencent WorkBuddy Changelog": ["workbuddy.cn", "cloud.tencent.com", "cloud.tencent.com.cn", "tencent.com"],
+            "QbitAI": ["qbitai.com"],
         }
+
+        self.official_page_sources = {
+            "Tencent WorkBuddy Changelog": {
+                "url": "https://www.workbuddy.cn/docs/workbuddy/Changelog",
+                "title_prefix": "WorkBuddy",
+            },
+        }
+
         self.article_verifier = ArticleVerifier(self.source_domains)
 
         # Chinese AI news sources (zh)
@@ -359,8 +409,10 @@ class NewsFetcher:
             "Google News AI (HI)": "https://news.google.com/rss/search?q=कृत्रिम+बुद्धिमत्ता&hl=hi&gl=IN&ceid=IN:hi",
         }
 
-        # Regional feeds are disabled until they have first-party or paper-level provenance.
-        self.chinese_feeds = {}
+        # Regional feeds stay disabled unless they are reliable primary/research sources or editorial corroboration sources.
+        self.chinese_feeds = {
+            "QbitAI": "https://www.qbitai.com/feed",
+        }
         self.japanese_feeds = {}
         self.french_feeds = {}
         self.spanish_feeds = {}
@@ -436,6 +488,85 @@ class NewsFetcher:
         except Exception as e:
             logger.error(f"Failed to fetch RSS feed {feed_url}: {str(e)}")
             return []
+
+    def fetch_official_page_updates(
+        self,
+        source_name: str,
+        source: Dict[str, str],
+        max_items: int = 10,
+    ) -> List[Dict[str, str]]:
+        """Fetch release/update entries from an official HTML changelog page."""
+        url = source.get("url", "")
+        if not url:
+            return []
+
+        try:
+            logger.info(f"Fetching official page source: {url}")
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            encoding = getattr(response, "encoding", None) or getattr(response, "apparent_encoding", None)
+            if not isinstance(encoding, str):
+                encoding = "utf-8"
+            html = response.content.decode(encoding, errors="replace")
+            items = self._parse_official_page_updates(source_name, source, html, max_items)
+            logger.info(f"Fetched {len(items)} items from official page source")
+            return items
+        except Exception as e:
+            logger.error(f"Failed to fetch official page source {url}: {str(e)}")
+            return []
+
+    def _parse_official_page_updates(
+        self,
+        source_name: str,
+        source: Dict[str, str],
+        html: str,
+        max_items: int = 10,
+    ) -> List[Dict[str, str]]:
+        """Parse recent h2-based changelog sections from an official HTML page."""
+        url = source.get("url", "")
+        prefix = source.get("title_prefix", source_name)
+        sections = re.findall(
+            r"<h2[^>]*>(.*?)</h2>(.*?)(?=<h2[^>]*>|</main>|</article>|$)",
+            html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
+        items = []
+        for title_html, body_html in sections:
+            raw_title = re.sub(r"<a\b.*?</a>", "", title_html, flags=re.IGNORECASE | re.DOTALL)
+            title = self._normalize_text(self._clean_html(raw_title))
+            if not title:
+                continue
+
+            date_match = re.search(
+                r"(20\d{2})[-./\u5e74](\d{1,2})[-./\u6708](\d{1,2})",
+                f"{title} {body_html}",
+            )
+            if not date_match:
+                continue
+
+            year, month, day = date_match.groups()
+            published = f"{year}-{int(month):02d}-{int(day):02d}T00:00:00+08:00"
+            description = self._normalize_text(self._clean_html(body_html))
+            item_title = title if title.startswith(prefix) else f"{prefix} {title}"
+            items.append({
+                "title": item_title,
+                "link": url,
+                "description": description or title,
+                "published": published,
+                "source": source_name,
+                "source_tier": self.source_tiers.get(source_name, "official"),
+            })
+            if len(items) >= max_items:
+                break
+
+        return items
+
+    def _normalize_text(self, text: str) -> str:
+        return re.sub(r"\s+", " ", text.replace("\u200b", " ")).strip()
 
     def _clean_html(self, text: Optional[str]) -> str:
         """Remove HTML tags from text"""
@@ -677,6 +808,11 @@ class NewsFetcher:
                 item['source'] = source_name
                 item['source_tier'] = self.source_tiers[source_name]
                 all_news['international'].append(item)
+
+        if language == "zh":
+            for source_name, source in self.official_page_sources.items():
+                items = self.fetch_official_page_updates(source_name, source, max_items_per_source)
+                all_news['domestic'].extend(items)
 
         # Fetch domestic news based on language
         language_feeds_map = {

@@ -34,6 +34,18 @@ class NewsQualityTests(unittest.TestCase):
             "VentureBeat AI",
             "MIT Technology Review AI",
             "Hacker News AI",
+            "Qwen Blog",
+            "DeepSeek Releases",
+            "Tencent Hunyuan Releases",
+            "PaddlePaddle Releases",
+            "MindSpore Releases",
+            "InternLM Releases",
+            "MiniCPM Releases",
+            "arXiv China AI Models",
+        }
+        trusted_domestic_sources = {
+            "Tencent WorkBuddy Changelog",
+            "QbitAI",
         }
         disabled_sources = {
             "Anthropic Blog",
@@ -48,13 +60,52 @@ class NewsQualityTests(unittest.TestCase):
 
         self.assertTrue(expected_sources.issubset(self.fetcher.rss_feeds))
         self.assertFalse(disabled_sources & self.fetcher.rss_feeds.keys())
+        self.assertFalse(disabled_sources & self.fetcher.chinese_feeds.keys())
         self.assertTrue(all(url.startswith("https://") for url in self.fetcher.rss_feeds.values()))
-        self.assertEqual(self.fetcher.chinese_feeds, {})
-        self.assertEqual(set(self.fetcher.rss_feeds), set(self.fetcher.source_tiers))
-        self.assertEqual(set(self.fetcher.rss_feeds), set(self.fetcher.source_domains))
+        self.assertTrue(trusted_domestic_sources.issubset(
+            set(self.fetcher.official_page_sources) | set(self.fetcher.chinese_feeds)
+        ))
+        configured_sources = (
+            set(self.fetcher.rss_feeds)
+            | set(self.fetcher.official_page_sources)
+            | set(self.fetcher.chinese_feeds)
+        )
+        self.assertEqual(configured_sources, set(self.fetcher.source_tiers))
+        self.assertEqual(configured_sources, set(self.fetcher.source_domains))
         self.assertTrue(set(self.fetcher.source_tiers.values()) <= {"official", "research", "editorial", "community"})
         self.assertEqual(self.fetcher.source_tiers["TechCrunch AI"], "editorial")
         self.assertEqual(self.fetcher.source_tiers["Hacker News AI"], "community")
+        self.assertEqual(self.fetcher.source_tiers["Tencent WorkBuddy Changelog"], "official")
+        self.assertEqual(self.fetcher.source_tiers["QbitAI"], "editorial")
+
+    def test_workbuddy_changelog_page_parses_recent_release_items(self):
+        html = """
+        <h1>WorkBuddy \u66f4\u65b0\u65e5\u5fd7</h1>
+        <h2>5.3.8 \u7248\u672c\u53d1\u5e03\uff082026-07-30\uff09</h2>
+        <ul>
+            <li>\u4f18\u5316 macOS \u6587\u4ef6\u7cfb\u7edf\uff0c\u4fee\u590d\u957f\u671f\u4f7f\u7528\u4e0b\u7684\u6027\u80fd\u95ee\u9898</li>
+            <li>\u4fee\u590d\u4ea7\u54c1\u7d22\u5f15\u81a8\u80c0\u5bfc\u81f4\u5386\u53f2\u4efb\u52a1\u65e0\u6cd5\u6062\u590d\u7684\u95ee\u9898</li>
+        </ul>
+        """
+        source = {
+            "url": "https://www.workbuddy.cn/docs/workbuddy/Changelog",
+            "title_prefix": "WorkBuddy",
+        }
+
+        items = self.fetcher._parse_official_page_updates(
+            "Tencent WorkBuddy Changelog",
+            source,
+            html,
+            max_items=3,
+        )
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["source"], "Tencent WorkBuddy Changelog")
+        self.assertEqual(items[0]["source_tier"], "official")
+        self.assertEqual(items[0]["title"], "WorkBuddy 5.3.8 \u7248\u672c\u53d1\u5e03\uff082026-07-30\uff09")
+        self.assertEqual(items[0]["link"], "https://www.workbuddy.cn/docs/workbuddy/Changelog")
+        self.assertEqual(items[0]["published"], "2026-07-30T00:00:00+08:00")
+        self.assertIn("\u4f18\u5316 macOS \u6587\u4ef6\u7cfb\u7edf", items[0]["description"])
 
     def test_community_source_only_accepts_primary_article_domains(self):
         verifier = fetcher_module.ArticleVerifier(self.fetcher.source_domains)
