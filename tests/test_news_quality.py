@@ -539,6 +539,68 @@ class NewsQualityTests(unittest.TestCase):
         self.assertIn("### [INT-1]", generator.provider.prompts[1])
         self.assertNotIn("### [INT-2]", generator.provider.prompts[1])
 
+
+    def test_selected_news_input_groups_domestic_and_international_sections(self):
+        generator = NewsGenerator.__new__(NewsGenerator)
+        selected = generator._format_selected_news(
+            ["INT-1", "DOM-1"],
+            {
+                "INT-1": {
+                    "title": "OpenAI model release",
+                    "source": "OpenAI News",
+                    "source_tier": "official",
+                    "selection_role": "primary",
+                    "verification_status": "body_verified",
+                    "verified_text": "International verified source text",
+                    "link": "https://openai.com/news/model",
+                    "description": "International model details",
+                    "published": "2026-08-09T00:00:00+00:00",
+                },
+                "DOM-1": {
+                    "title": "Qwen model update",
+                    "source": "Qwen Blog",
+                    "source_tier": "official",
+                    "selection_role": "primary",
+                    "verification_status": "body_verified",
+                    "verified_text": "Domestic verified source text",
+                    "link": "https://qwenlm.github.io/blog/update",
+                    "description": "Domestic model details",
+                    "published": "2026-08-09T08:00:00+08:00",
+                },
+            },
+        )
+
+        domestic_index = selected.index("## Domestic AI Developments")
+        international_index = selected.index("## International AI Developments")
+        self.assertLess(domestic_index, international_index)
+        self.assertIn("### [DOM-1] Qwen model update", selected)
+        self.assertIn("### [INT-1] OpenAI model release", selected)
+        self.assertIn("Domestic verified source text", selected)
+        self.assertIn("International verified source text", selected)
+
+    def test_selected_news_input_keeps_empty_section_notice(self):
+        generator = NewsGenerator.__new__(NewsGenerator)
+        selected = generator._format_selected_news(
+            ["INT-1"],
+            {
+                "INT-1": {
+                    "title": "OpenAI model release",
+                    "source": "OpenAI News",
+                    "source_tier": "official",
+                    "verification_status": "body_verified",
+                    "verified_text": "International verified source text",
+                    "link": "https://openai.com/news/model",
+                    "description": "International model details",
+                    "published": "2026-08-09T00:00:00+00:00",
+                },
+            },
+        )
+
+        self.assertIn("## Domestic AI Developments", selected)
+        self.assertIn("No selected domestic items passed verification and selection rules.", selected)
+        self.assertIn("## International AI Developments", selected)
+        self.assertIn("### [INT-1] OpenAI model release", selected)
+
     def test_selection_input_contains_corroboration_metadata(self):
         generator = NewsGenerator.__new__(NewsGenerator)
         formatted, _ = generator._format_news_with_ids({
@@ -583,6 +645,9 @@ class NewsQualityTests(unittest.TestCase):
         template = config.stage2_prompt_template
 
         self.assertIn("AI Daily Research Brief", template)
+        self.assertIn("Domestic AI Developments", template)
+        self.assertIn("International AI Developments", template)
+        self.assertIn("Do not force equal counts", template)
         self.assertIn("Executive Summary", template)
         self.assertIn("Key Signals", template)
         self.assertIn("Source Tier", template)
@@ -595,6 +660,9 @@ class NewsQualityTests(unittest.TestCase):
         template = config.stage2_prompt_template
 
         self.assertIn("AI Daily Research Brief", template)
+        self.assertIn("Domestic AI Developments", template)
+        self.assertIn("International AI Developments", template)
+        self.assertIn("Do not force equal counts", template)
         self.assertIn("Executive Summary", template)
         self.assertIn("Key Signals", template)
         self.assertIn("Source Tier", template)

@@ -129,32 +129,56 @@ class NewsGenerator:
         return formatted, news_items
 
 
+    def _format_selected_news_item(self, news_id: str, item: Dict) -> str:
+        formatted = f"### [{news_id}] {item['title']}\n"
+        formatted += f"**Source:** {item['source']}\n"
+        formatted += f"**Source Tier:** {item.get('source_tier', 'unknown')}\n"
+        if item.get('selection_role'):
+            formatted += f"**Selection Role:** {item['selection_role']}\n"
+        if item.get('corroboration_score') is not None:
+            supporters = ", ".join(item.get('supporting_sources', [])) or "none"
+            supporter_tiers = ", ".join(item.get('supporting_source_tiers', [])) or "none"
+            formatted += (
+                f"**Corroboration:** score={item.get('corroboration_score', 0)}; "
+                f"supporting_sources={supporters}; supporting_tiers={supporter_tiers}\n"
+            )
+        if item.get('verification_status'):
+            formatted += f"**Verification:** {item['verification_status']}\n"
+        content = item.get('verified_text') or item.get('description', '')
+        if content:
+            label = "Verified Article Text" if item.get('verified_text') else "Content"
+            formatted += f"**{label}:** {content}\n"
+        formatted += f"**Link:** {item['link']}\n"
+        if item['published']:
+            formatted += f"**Published:** {item['published']}\n"
+        return formatted + "\n"
+
     def _format_selected_news(self, selected_ids: List[str], news_items: Dict[str, Dict]) -> str:
         formatted_selected = "# Selected High-Quality AI News Items\n\n"
-        for news_id in selected_ids:
-            item = news_items[news_id]
-            formatted_selected += f"### [{news_id}] {item['title']}\n"
-            formatted_selected += f"**Source:** {item['source']}\n"
-            formatted_selected += f"**Source Tier:** {item.get('source_tier', 'unknown')}\n"
-            if item.get('selection_role'):
-                formatted_selected += f"**Selection Role:** {item['selection_role']}\n"
-            if item.get('corroboration_score') is not None:
-                supporters = ", ".join(item.get('supporting_sources', [])) or "none"
-                supporter_tiers = ", ".join(item.get('supporting_source_tiers', [])) or "none"
-                formatted_selected += (
-                    f"**Corroboration:** score={item.get('corroboration_score', 0)}; "
-                    f"supporting_sources={supporters}; supporting_tiers={supporter_tiers}\n"
-                )
-            if item.get('verification_status'):
-                formatted_selected += f"**Verification:** {item['verification_status']}\n"
-            content = item.get('verified_text') or item.get('description', '')
-            if content:
-                label = "Verified Article Text" if item.get('verified_text') else "Content"
-                formatted_selected += f"**{label}:** {content}\n"
-            formatted_selected += f"**Link:** {item['link']}\n"
-            if item['published']:
-                formatted_selected += f"**Published:** {item['published']}\n"
-            formatted_selected += "\n"
+        domestic_ids = [news_id for news_id in selected_ids if news_id.startswith("DOM-")]
+        international_ids = [news_id for news_id in selected_ids if not news_id.startswith("DOM-")]
+        sections = [
+            (
+                "Domestic AI Developments",
+                domestic_ids,
+                "No selected domestic items passed verification and selection rules.",
+            ),
+            (
+                "International AI Developments",
+                international_ids,
+                "No selected international items passed verification and selection rules.",
+            ),
+        ]
+
+        for title, section_ids, empty_notice in sections:
+            formatted_selected += f"## {title}\n\n"
+            if not section_ids:
+                formatted_selected += f"{empty_notice}\n\n"
+                continue
+            for news_id in section_ids:
+                formatted_selected += self._format_selected_news_item(news_id, news_items[news_id])
+                formatted_selected += "\n"
+
         return formatted_selected
 
     def _is_selection_allowed(self, item: Dict) -> bool:
