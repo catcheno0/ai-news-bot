@@ -13,7 +13,7 @@ class NewsQualityTests(unittest.TestCase):
         self.fetcher = NewsFetcher()
 
     def test_strict_mode_uses_tiered_sources_without_untrusted_domains(self):
-        expected_sources = {
+        expected_international_sources = {
             "OpenAI News",
             "Google AI Blog",
             "Google DeepMind Blog",
@@ -34,6 +34,8 @@ class NewsQualityTests(unittest.TestCase):
             "VentureBeat AI",
             "MIT Technology Review AI",
             "Hacker News AI",
+        }
+        expected_chinese_primary_sources = {
             "Qwen Blog",
             "DeepSeek Releases",
             "Tencent Hunyuan Releases",
@@ -58,10 +60,12 @@ class NewsQualityTests(unittest.TestCase):
             "JiQiZhiXin (机器之心)",
         }
 
-        self.assertTrue(expected_sources.issubset(self.fetcher.rss_feeds))
+        self.assertTrue(expected_international_sources.issubset(self.fetcher.rss_feeds))
+        self.assertTrue(expected_chinese_primary_sources.issubset(self.fetcher.chinese_feeds))
         self.assertFalse(disabled_sources & self.fetcher.rss_feeds.keys())
         self.assertFalse(disabled_sources & self.fetcher.chinese_feeds.keys())
         self.assertTrue(all(url.startswith("https://") for url in self.fetcher.rss_feeds.values()))
+        self.assertTrue(all(url.startswith("https://") for url in self.fetcher.chinese_feeds.values()))
         self.assertTrue(trusted_domestic_sources.issubset(
             set(self.fetcher.official_page_sources) | set(self.fetcher.chinese_feeds)
         ))
@@ -346,6 +350,50 @@ class NewsQualityTests(unittest.TestCase):
         )
 
         self.assertEqual([item["title"] for item in news["international"]], ["OpenAI 0", "Google 0"])
+
+    def test_strict_verification_reserves_budget_for_domestic_items(self):
+        now = datetime.now(timezone.utc).isoformat()
+        self.fetcher.rss_feeds = {
+            "OpenAI News": "https://example.com/openai.xml",
+            "Google AI Blog": "https://example.com/google.xml",
+        }
+        self.fetcher.chinese_feeds = {
+            "QbitAI": "https://example.com/qbitai.xml",
+        }
+        self.fetcher.source_tiers = {
+            "OpenAI News": "official",
+            "Google AI Blog": "official",
+            "QbitAI": "editorial",
+        }
+        self.fetcher.fetch_official_page_updates = Mock(return_value=[])
+        self.fetcher.fetch_rss_feed = Mock(side_effect=[
+            [{"title": f"OpenAI {i}", "link": f"https://openai.com/{i}", "description": "", "published": now} for i in range(5)],
+            [{"title": f"Google {i}", "link": f"https://blog.google/{i}", "description": "", "published": now} for i in range(5)],
+            [{"title": f"QbitAI {i}", "link": f"https://qbitai.com/{i}", "description": "", "published": now} for i in range(3)],
+        ])
+
+        def verify(item):
+            verified = dict(item)
+            verified["verification_status"] = "body_verified"
+            verified["verified_text"] = f"Body for {item['title']}"
+            return verified
+
+        self.fetcher.article_verifier = Mock()
+        self.fetcher.article_verifier.verify_item.side_effect = verify
+
+        news = self.fetcher.fetch_recent_news(
+            language="zh",
+            max_items_per_source=5,
+            strict_verification=True,
+            max_articles_to_verify=4,
+        )
+
+        domestic_titles = [item["title"] for item in news["domestic"]]
+        self.assertTrue(
+            domestic_titles,
+            "domestic items must be verified even when international exceeds the budget",
+        )
+        self.assertIn("QbitAI 0", domestic_titles)
 
     def test_selection_input_contains_verified_article_text(self):
         generator = NewsGenerator.__new__(NewsGenerator)

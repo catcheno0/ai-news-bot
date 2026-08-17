@@ -155,14 +155,6 @@ class NewsFetcher:
             "VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
             "MIT Technology Review AI": "https://www.technologyreview.com/topic/artificial-intelligence/feed/",
             "Hacker News AI": "https://hnrss.org/newest?q=AI+OR+LLM+OR+OpenAI+OR+Anthropic+OR+DeepMind+OR+Mistral+OR+Cohere&points=50&count=20",
-            "Qwen Blog": "https://qwenlm.github.io/blog/index.xml",
-            "DeepSeek Releases": "https://github.com/deepseek-ai/DeepSeek-R1/releases.atom",
-            "Tencent Hunyuan Releases": "https://github.com/Tencent-Hunyuan/HunyuanVideo/releases.atom",
-            "PaddlePaddle Releases": "https://github.com/PaddlePaddle/Paddle/releases.atom",
-            "MindSpore Releases": "https://github.com/mindspore-ai/mindspore/releases.atom",
-            "InternLM Releases": "https://github.com/InternLM/InternLM/releases.atom",
-            "MiniCPM Releases": "https://github.com/OpenBMB/MiniCPM/releases.atom",
-            "arXiv China AI Models": "https://export.arxiv.org/api/query?search_query=all:Qwen+OR+all:DeepSeek+OR+all:InternLM+OR+all:MiniCPM+OR+all:ChatGLM+OR+all:Hunyuan&sortBy=submittedDate&sortOrder=descending&max_results=20",
         }
 
         self.source_tiers = {
@@ -410,8 +402,20 @@ class NewsFetcher:
         }
 
         # Regional feeds stay disabled unless they are reliable primary/research sources or editorial corroboration sources.
+        # Chinese-language digests treat Chinese-origin sources as domestic: keep the
+        # QbitAI editorial source for corroboration plus the official/research primary sources.
         self.chinese_feeds = {
+            # Editorial (corroboration) source
             "QbitAI": "https://www.qbitai.com/feed",
+            # Chinese-origin official/research primary sources
+            "Qwen Blog": "https://qwenlm.github.io/blog/index.xml",
+            "DeepSeek Releases": "https://github.com/deepseek-ai/DeepSeek-R1/releases.atom",
+            "Tencent Hunyuan Releases": "https://github.com/Tencent-Hunyuan/HunyuanVideo/releases.atom",
+            "PaddlePaddle Releases": "https://github.com/PaddlePaddle/Paddle/releases.atom",
+            "MindSpore Releases": "https://github.com/mindspore-ai/mindspore/releases.atom",
+            "InternLM Releases": "https://github.com/InternLM/InternLM/releases.atom",
+            "MiniCPM Releases": "https://github.com/OpenBMB/MiniCPM/releases.atom",
+            "arXiv China AI Models": "https://export.arxiv.org/api/query?search_query=all:Qwen+OR+all:DeepSeek+OR+all:InternLM+OR+all:MiniCPM+OR+all:ChatGLM+OR+all:Hunyuan&sortBy=submittedDate&sortOrder=descending&max_results=20",
         }
         self.japanese_feeds = {}
         self.french_feeds = {}
@@ -754,8 +758,27 @@ class NewsFetcher:
         remaining = max_articles_to_verify
         verified_data = {'international': [], 'domestic': []}
 
-        for section in ('international', 'domestic'):
-            for item in self._iter_items_by_source_rounds(news_data[section]):
+        # Interleave international and domestic items so a shared verification
+        # budget is spent fairly across both sections. Previously the budget was
+        # consumed entirely by the international section, leaving domestic items
+        # unverified and the domestic digest section permanently empty.
+        iterators = {
+            'international': self._iter_items_by_source_rounds(news_data['international']),
+            'domestic': self._iter_items_by_source_rounds(news_data['domestic']),
+        }
+        active = set(iterators)
+
+        while active:
+            progressed = False
+            for section in ('international', 'domestic'):
+                if section not in active:
+                    continue
+                try:
+                    item = next(iterators[section])
+                except StopIteration:
+                    active.discard(section)
+                    continue
+
                 if remaining is not None and remaining <= 0:
                     logger.info("Article verification limit reached")
                     return verified_data
@@ -766,6 +789,11 @@ class NewsFetcher:
                 verified_item = self.article_verifier.verify_item(item)
                 if verified_item:
                     verified_data[section].append(verified_item)
+
+                progressed = True
+
+            if not progressed:
+                break
 
         logger.info(
             f"Article verification kept {len(verified_data['international'])} international "
