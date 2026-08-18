@@ -122,7 +122,7 @@ You are a senior AI industry analyst. Analyze the {total_items} verified news it
 - ✅ Balanced coverage across categories (LLM, Agents, Research, Products, etc.)
 - ✅ Include both international and domestic news when available, but do not force equal counts or lower the quality bar for either section
 - Prefer items with an "official" or "research" source tier
-- Use editorial/community items only when **Selection Role:** is primary_link or corroborated_primary
+- Use editorial/community items only when **Selection Role:** is primary_link, corroborated_primary, or trusted_editorial
 - Never select **Selection Role:** context_only items; they are clues for comparison only
 - ✅ Use the supplied original link as the sole source of factual claims
 - ✅ Only select items marked **Verification:** body_verified when present

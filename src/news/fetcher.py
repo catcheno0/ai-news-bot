@@ -262,6 +262,12 @@ class NewsFetcher:
             "QbitAI": ["qbitai.com"],
         }
 
+        # Editorial sources trusted to provide primary domestic coverage when their
+        # article body is verified. Chinese AI news is reported by editorial outlets
+        # (e.g. QbitAI) that have no official/research counterpart, so they must stay
+        # selectable without official/research corroboration.
+        self.trusted_editorial_sources = {"QbitAI"}
+
         self.official_page_sources = {
             "Tencent WorkBuddy Changelog": {
                 "url": "https://www.workbuddy.cn/docs/workbuddy/Changelog",
@@ -728,8 +734,10 @@ class NewsFetcher:
                 item["selection_role"] = "primary"
             elif self._has_primary_source_link(item):
                 item["selection_role"] = "primary_link"
-            elif any(tier in {"official", "research"} for tier in supporter_tiers):
+            elif any(supporter_tier in {"official", "research"} for supporter_tier in supporter_tiers):
                 item["selection_role"] = "corroborated_primary"
+            elif item.get("source") in self.trusted_editorial_sources:
+                item["selection_role"] = "trusted_editorial"
             else:
                 item["selection_role"] = "context_only"
 

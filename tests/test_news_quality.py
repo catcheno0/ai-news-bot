@@ -157,6 +157,29 @@ class NewsQualityTests(unittest.TestCase):
         self.assertEqual(editorial_item["corroboration_score"], 1)
         self.assertEqual(editorial_item["supporting_sources"], ["OpenAI News"])
 
+    def test_trusted_editorial_source_is_selectable_without_corroboration(self):
+        news_data = {
+            "international": [],
+            "domestic": [
+                {
+                    "title": "阿里开源新一代模型",
+                    "source": "QbitAI",
+                    "source_tier": "editorial",
+                    "link": "https://www.qbitai.com/2026/08/example.html",
+                    "description": "QbitAI reports on a new model release",
+                },
+            ],
+        }
+
+        annotated = self.fetcher._annotate_corroboration(news_data)
+        item = annotated["domestic"][0]
+
+        self.assertIn("QbitAI", self.fetcher.trusted_editorial_sources)
+        self.assertEqual(item["selection_role"], "trusted_editorial")
+
+        generator = NewsGenerator.__new__(NewsGenerator)
+        self.assertTrue(generator._is_selection_allowed(item))
+
     def test_fetch_recent_news_deduplicates_titles_and_keeps_official_source(self):
         now = datetime.now(timezone.utc).isoformat()
         self.fetcher.rss_feeds = {

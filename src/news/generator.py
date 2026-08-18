@@ -184,7 +184,7 @@ class NewsGenerator:
     def _is_selection_allowed(self, item: Dict) -> bool:
         role = item.get("selection_role")
         if role:
-            return role in {"primary", "primary_link", "corroborated_primary"}
+            return role in {"primary", "primary_link", "corroborated_primary", "trusted_editorial"}
         return item.get("source_tier") in {"official", "research"}
 
     def _allowed_news_ids(self, news_items: Dict[str, Dict], target_max_items: int) -> List[str]:
