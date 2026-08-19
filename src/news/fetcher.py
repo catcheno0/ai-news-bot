@@ -188,6 +188,10 @@ class NewsFetcher:
             "arXiv China AI Models": "research",
             "Tencent WorkBuddy Changelog": "official",
             "QbitAI": "editorial",
+            "AI Era": "editorial",
+            "Leiphone": "editorial",
+            "InfoQ CN": "editorial",
+            "GeekPark": "editorial",
         }
 
         self.primary_source_domains = [
@@ -260,13 +264,17 @@ class NewsFetcher:
             "arXiv China AI Models": ["arxiv.org"],
             "Tencent WorkBuddy Changelog": ["workbuddy.cn", "cloud.tencent.com", "cloud.tencent.com.cn", "tencent.com"],
             "QbitAI": ["qbitai.com"],
+            "AI Era": ["aiera.com.cn"],
+            "Leiphone": ["leiphone.com"],
+            "InfoQ CN": ["infoq.cn"],
+            "GeekPark": ["geekpark.net"],
         }
 
         # Editorial sources trusted to provide primary domestic coverage when their
         # article body is verified. Chinese AI news is reported by editorial outlets
         # (e.g. QbitAI) that have no official/research counterpart, so they must stay
         # selectable without official/research corroboration.
-        self.trusted_editorial_sources = {"QbitAI"}
+        self.trusted_editorial_sources = {"QbitAI", "AI Era", "Leiphone", "InfoQ CN", "GeekPark"}
 
         self.official_page_sources = {
             "Tencent WorkBuddy Changelog": {
@@ -408,11 +416,15 @@ class NewsFetcher:
         }
 
         # Regional feeds stay disabled unless they are reliable primary/research sources or editorial corroboration sources.
-        # Chinese-language digests treat Chinese-origin sources as domestic: keep the
-        # QbitAI editorial source for corroboration plus the official/research primary sources.
+        # Chinese-language digests treat Chinese-origin sources as domestic: trusted
+        # editorial outlets plus the official/research primary sources.
         self.chinese_feeds = {
-            # Editorial (corroboration) source
+            # Editorial sources trusted for domestic coverage
             "QbitAI": "https://www.qbitai.com/feed",
+            "AI Era": "https://www.aiera.com.cn/feed",
+            "Leiphone": "https://www.leiphone.com/feed",
+            "InfoQ CN": "https://www.infoq.cn/feed",
+            "GeekPark": "https://www.geekpark.net/rss",
             # Chinese-origin official/research primary sources
             "Qwen Blog": "https://qwenlm.github.io/blog/index.xml",
             "DeepSeek Releases": "https://github.com/deepseek-ai/DeepSeek-R1/releases.atom",

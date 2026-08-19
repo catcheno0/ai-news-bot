@@ -48,6 +48,10 @@ class NewsQualityTests(unittest.TestCase):
         trusted_domestic_sources = {
             "Tencent WorkBuddy Changelog",
             "QbitAI",
+            "AI Era",
+            "Leiphone",
+            "InfoQ CN",
+            "GeekPark",
         }
         disabled_sources = {
             "Anthropic Blog",
@@ -81,6 +85,10 @@ class NewsQualityTests(unittest.TestCase):
         self.assertEqual(self.fetcher.source_tiers["Hacker News AI"], "community")
         self.assertEqual(self.fetcher.source_tiers["Tencent WorkBuddy Changelog"], "official")
         self.assertEqual(self.fetcher.source_tiers["QbitAI"], "editorial")
+        self.assertTrue(self.fetcher.trusted_editorial_sources.issubset(self.fetcher.chinese_feeds))
+        self.assertTrue(all(
+            self.fetcher.source_tiers[s] == "editorial" for s in self.fetcher.trusted_editorial_sources
+        ))
 
     def test_workbuddy_changelog_page_parses_recent_release_items(self):
         html = """
